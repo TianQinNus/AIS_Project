@@ -1,10 +1,307 @@
-目前建模进展：
-我们发现这个数据存在非常严重的类别不平衡问题。Validation data 中大约 97% 都是 C0（未来 48 个时间单位内没有维修），所以如果模型无脑把所有车辆都预测成 C0，也能得到约 97% Accuracy。因此这里不能单纯用 Accuracy 判断模型好坏。
+FleetCare AI — Model Test Summary（简洁版）
 
-我们之后加入了车辆历史变化的 Temporal Features（例如前后读数变化和变化速率），并调整了训练数据的 sampling，避免同一辆车的大量历史 C0 记录把其他类别淹没。
+说明：
+- Teammate 的实验使用原编号。
+- 个人实验为避免混淆，统一使用 c 后缀。
+- 当前个人实验已完成至 Test 10c。
+- Test 11c 已准备，尚未运行。
 
-调整后，对最紧急的 C4（0–6 个时间单位内发生维修），Recall 从 2.6% 提升到了 26.3%，说明模型开始真正识别接近维修的车辆。
 
-接下来我们测试了不同程度的 class weighting，用来平衡两个业务风险：漏掉真正快坏的车和产生太多不必要的维修警报。目前轻度加权效果最好，C4 Recall 提升到 34.2%
+======================================================================
+Test 00 — Data Exploration + Random Forest Baseline
+======================================================================
 
-**目前结论：**这个项目真正的问题不是追求最高 Accuracy，而是在 “尽量不要漏掉即将维修的车辆” 和 “不要产生太多错误维修警报” 之间找到最佳平衡。目前 Vehicle-aware sampling + Temporal XGBoost + Light Class Weighting 是我们测试中业务 Cost 最低的方案。
+目的：
+了解数据结构、类别分布、缺失情况和基础建模难点。
+
+在做什么：
+完成数据探索、censoring-aware label 构造，并建立 Random Forest baseline。
+
+结论：
+数据存在非常严重的类别不平衡，Accuracy 不能作为主要评价指标；后续需要重点关注 minority-class detection 和 vehicle-level bias。
+
+
+======================================================================
+Test 01 — Temporal XGBoost
+======================================================================
+
+目的：
+验证历史变化信息是否比只看当前 readout 更有价值。
+
+在做什么：
+加入 Previous、Delta、Rate 等 one-step temporal features，并使用 XGBoost。
+
+结论：
+Temporal information 有预测价值，但仅依赖 one-step history 仍不足以有效识别高风险少数类别。
+
+
+======================================================================
+Test 02 — Vehicle-Aware Sampling
+======================================================================
+
+目的：
+减少同一 vehicle 大量重复 observations 对训练造成的偏差。
+
+在做什么：
+Repair vehicle 每个 class window 最多取一条 observation；Non-repair vehicle 最多取一条 safe C0。
+
+结论：
+Vehicle-Aware Sampling 明显改善 high-risk detection，是后续模型的重要基础组件。
+
+
+======================================================================
+Test 03 — Vehicle-Aware + No Weight
+======================================================================
+
+目的：
+单独评估 Vehicle-Aware Sampling 的效果，分离 class weighting 的影响。
+
+在做什么：
+保留 temporal features 和 vehicle-aware sampling，但不使用 class weights。
+
+结论：
+No-weight 模型整体更加平衡，说明 class weighting 并不是越强越好。
+
+
+======================================================================
+Test 04 — Class Weight Ablation
+======================================================================
+
+目的：
+寻找 minority sensitivity 与 false alerts 之间更合理的平衡。
+
+在做什么：
+比较 No Weight、Light、Moderate、Stronger、Risk-Focused 等 weighting strategy。
+
+结论：
+增加 minority weight 可以提高 C4 Recall，但同时显著增加 false positives；模型不能只按 Recall 选择。
+
+
+======================================================================
+Teammate Test — Multi-Readout Historical Features
+======================================================================
+
+目的：
+判断更长历史 pattern 是否优于只看最近一次变化。
+
+在做什么：
+在 Current / Previous / Delta / Rate 基础上，加入 change3、change5、mean3、std3、mean5、std5 等 multi-readout features。
+
+结论：
+Multi-History + No Weight 是目前综合表现最平衡的 base candidate，说明更丰富的历史表示比继续增加 class weight 更有价值。
+
+
+======================================================================
+Teammate Test — SHAP Explainability
+======================================================================
+
+目的：
+解释模型为什么产生高风险预测。
+
+在做什么：
+对当前 Multi-History + No Weight 模型进行 Global SHAP 和 Local SHAP。
+
+结论：
+模型确实大量利用 historical trend、rate、rolling mean/std 等特征；同时部分 C0 vehicle 也表现出类似 C4 的历史 pattern，这解释了 false positives。
+
+
+======================================================================
+Teammate Test — Binary Diagnostic
+======================================================================
+
+目的：
+初步探索 C0 vs C1-C4 的 binary risk classification。
+
+在做什么：
+将 C0 设为 negative、C1-C4 设为 positive，并测试 binary model 与不同 thresholds。
+
+结论：
+Binary diagnostic 已经实现，但目前没有完整结果，因此暂时不能作为正式模型选择依据。
+
+
+======================================================================
+Test 05c — Raw Probability + Minimum Expected Cost
+======================================================================
+
+目的：
+测试模型 raw probability 能否直接结合 business cost matrix 生成 maintenance decision。
+
+在做什么：
+比较普通 Argmax 和 Minimum Expected Cost decision。
+
+结论：
+Raw probability 直接进入 MEC 会产生极端 high-risk predictions，说明 raw predict_proba 不能直接解释为真实业务概率。
+
+
+======================================================================
+Test 06c — Probability Calibration
+======================================================================
+
+目的：
+修正 raw probability distortion。
+
+在做什么：
+比较 Raw、Prior Correction 和 Logit Calibration。
+
+结论：
+Calibration 明显必要；但当前实验中 calibration fitting 和 evaluation 没有完全分开，因此需要更严格 protocol。
+
+
+======================================================================
+Test 07c — Three-Way Calibration + Multi-Seed
+======================================================================
+
+目的：
+解决 calibration evaluation leakage，并验证 calibration method 是否稳定。
+
+在做什么：
+将数据拆成 Base Train、Calibration、Selection Dev，并使用多个 random seeds 比较 calibration 方法。
+
+结论：
+Logit Calibration 在多个 seeds 下稳定表现最好，因此成为当前主要 calibration candidate。
+
+
+======================================================================
+Test 08c — Cumulative Risk + Capacity-Constrained Ranking
+======================================================================
+
+目的：
+避免 Argmax 几乎全部 C0，以及 MEC 产生过量 high-risk alerts。
+
+在做什么：
+构造 Risk48 / Risk24 / Risk12 / Risk6，并按 Top-K inspection capacity 对 fleet 排序。
+
+结论：
+Capacity-Constrained Ranking 比直接分类更符合实际 maintenance scenario，但暴露出明显的 internal-to-external ranking gap。
+
+
+======================================================================
+Test 09c — Rebase 到 Teammate 最新 Base
+======================================================================
+
+目的：
+确认 Test 08c 的 external gap 是否只是因为使用了旧 one-step + weighted base。
+
+在做什么：
+将 calibration、cumulative risk 和 capacity ranking 重新建立在 Multi-History + No Weight base 上。
+
+结论：
+最新 base 确实带来一定 external ranking 改善，而且 Logit Calibration 仍然稳定；但 generalization gap 仍未解决。
+
+
+======================================================================
+Test 10c — Direct Horizon-Specific Binary Models
+======================================================================
+
+目的：
+测试是否应该放弃 five-class-derived risk，直接训练 repair-within-H binary model。
+
+在做什么：
+分别训练 Risk48、Risk24、Risk12、Risk6 binary models，并使用 horizon-specific censoring 增加安全训练数据。
+
+结论：
+虽然获得了更多安全训练样本，binary probability calibration 也更好，但 direct binary ranking 并没有稳定优于当前 multiclass-derived risk，因此暂时不替换现有架构。
+
+
+======================================================================
+当前最终结果
+======================================================================
+
+当前最合理的模型主线：
+
+Vehicle-Aware Sampling
++
+Multi-Readout Historical Features
++
+Multiclass XGBoost
++
+No Additional Class Weighting
++
+Logit Calibration
++
+Risk48 / Risk24 / Risk12 / Risk6
++
+Capacity-Constrained Ranking
++
+SHAP Explainability
+
+
+目前已经比较明确：
+
+1. Vehicle-Aware Sampling 需要保留。
+2. Multi-Readout Historical Features 优于仅 one-step history。
+3. No Weight 比较适合作为当前 base candidate。
+4. Raw probability 不能直接进入 business decision。
+5. Logit Calibration 是目前最稳定的 calibration candidate。
+6. Capacity-Constrained Ranking 比 Argmax / MEC 更适合最终业务场景。
+7. Direct Binary Horizon Models 暂时没有足够证据替换 Multiclass Derived Risk。
+
+
+======================================================================
+当前主要问题
+======================================================================
+
+当前最大的技术问题：
+
+External Generalization Gap。
+
+也就是：
+
+模型在 internal Policy Dev 上 ranking 较好，
+但到 Official Validation 后明显下降。
+
+
+目前还没有确定：
+
+- 最终主 Risk Horizon
+- 最终 Top-K inspection capacity
+- external gap 的主要来源
+
+
+======================================================================
+Test 11c — Feature Robustness / Generalization Ablation（待运行）
+======================================================================
+
+目的：
+研究 external generalization gap 是否来自 feature representation，尤其是 absolute time_step dependency。
+
+在做什么：
+比较：
+
+1. Full Multi-History
+2. Full Multi-History without time_step
+3. One-Step
+4. One-Step without time_step
+
+并保持其他训练、calibration 和 ranking protocol 不变。
+
+结论目标：
+判断：
+- Multi-History 是否在严格相同 protocol 下仍然最好；
+- time_step 是否是真实稳定 signal，还是 study-position proxy；
+- 删除 time_step 是否能缩小 internal-to-external generalization gap。
+
+
+======================================================================
+后续测试思路
+======================================================================
+
+优先运行 Test 11c。
+
+根据结果：
+
+A. 如果 Full Multi-History 仍然内部和外部最好：
+   保留当前 feature set，进入最终 robustness、policy 和 reasoning integration。
+
+B. 如果 No-TimeStep variant 几乎不损失 internal performance，
+   但 external 更稳定：
+   进一步降低模型对 absolute time_step 的依赖。
+
+C. 如果所有 feature variants 都存在类似 external gap：
+   下一步转向：
+   - Cutoff-Aware Development Protocol
+   - Grouped Cross-Validation
+   - Distribution-Robust Evaluation
+
+最终目标不是单纯提高分类指标，
+而是得到一个在 unseen fleet 上稳定、可解释、alert burden 可控的 maintenance risk-ranking system。
