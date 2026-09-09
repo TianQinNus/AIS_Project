@@ -1,0 +1,50 @@
+{
+  "model_name": "FleetCare Vehicle-Aware Multi-History XGBoost",
+  "model_type": "XGBClassifier",
+  "feature_representation": "Multi-readout historical features",
+  "sampling": "Vehicle-aware",
+  "class_weighting": "None",
+  "calibration": "5-fold vehicle-level OOF multinomial logit calibration",
+  "random_state": 42,
+  "num_classes": 5,
+  "xgboost_parameters": {
+    "n_estimators": 150,
+    "learning_rate": 0.08,
+    "max_depth": 5,
+    "min_child_weight": 3,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "reg_alpha": 0.0,
+    "reg_lambda": 1.0,
+    "objective": "multi:softprob"
+  },
+  "raw_validation_metrics": {
+    "accuracy": 0.7893380895759017,
+    "macro_precision": 0.21254180513992904,
+    "macro_recall": 0.25564558034597695,
+    "macro_f1": 0.2031238886482357,
+    "weighted_f1": 0.8621131615892607,
+    "log_loss": 0.8911369926956184
+  },
+  "calibrated_validation_metrics": {
+    "accuracy": 0.7875544986127626,
+    "macro_precision": 0.20462686893840476,
+    "macro_recall": 0.23958975851032877,
+    "macro_f1": 0.19230992776726427,
+    "weighted_f1": 0.8605990231156421,
+    "log_loss": 0.970707599706306
+  },
+  "class_definition": {
+    "C0": ">48",
+    "C1": "24-48",
+    "C2": "12-24",
+    "C3": "6-12",
+    "C4": "0-6"
+  },
+  "risk_definition": {
+    "Risk48": "P(C1)+P(C2)+P(C3)+P(C4)",
+    "Risk24": "P(C2)+P(C3)+P(C4)",
+    "Risk12": "P(C3)+P(C4)",
+    "Risk6": "P(C4)"
+  }
+}

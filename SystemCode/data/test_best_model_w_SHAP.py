@@ -1,15 +1,16 @@
 # ============================================================
-# FleetCare AI
-# Final Candidate Model
+# FleetCare AI - FINAL MODEL
 #
 # Vehicle-Aware Sampling
 # + Multi-Readout Historical Features
 # + Multiclass XGBoost
-# + No Class Weighting
-# + SHAP Explainability
+# + No Additional Class Weighting
+# + Vehicle-Level OOF Logit Calibration
+# + Official Validation Evaluation
+# + Final Model Saving
 #
 # Target:
-# C0 = >48 time units before repair
+# C0 = >48 operational time units before repair
 # C1 = 24-48
 # C2 = 12-24
 # C3 = 6-12
@@ -23,22 +24,32 @@
 
 from pathlib import Path
 import gc
+import json
+import joblib
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import shap
 
+from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GroupKFold
 
 from sklearn.metrics import (
     accuracy_score,
+    precision_score,
+    recall_score,
     f1_score,
     classification_report,
-    confusion_matrix
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+    average_precision_score,
+    roc_auc_score,
+    log_loss,
 )
 
 from xgboost import XGBClassifier
@@ -50,55 +61,58 @@ from xgboost import XGBClassifier
 
 RANDOM_STATE = 42
 
-SHAP_SAMPLE_SIZE = 300
+N_CLASSES = 5
+N_CALIBRATION_FOLDS = 5
 
-pd.set_option(
-    "display.max_columns",
-    200
-)
+EPSILON = 1e-6
 
-pd.set_option(
-    "display.width",
-    250
-)
+CLASS_IDS = [0, 1, 2, 3, 4]
+
+CLASS_NAMES = [
+    "C0",
+    "C1",
+    "C2",
+    "C3",
+    "C4"
+]
+
+HORIZONS = {
+
+    "Risk48": [1, 2, 3, 4],
+
+    "Risk24": [2, 3, 4],
+
+    "Risk12": [3, 4],
+
+    "Risk6": [4],
+}
 
 
 # ============================================================
 # 3. PATHS
 # ============================================================
-#
-# Adjust DATA_DIR if necessary.
-#
-# This assumes the script is executed from:
-#
-# AIS_Project/SystemCode/data/
-#
-# and the dataset is:
-#
-# AIS_Project/SystemCode/data/raw/
-#
-# If your existing ../data/raw path works, keep this.
-# ============================================================
 
 DATA_DIR = Path("../data/raw")
 
-OUTPUT_DIR = Path(
-    "../data/processed"
-)
+OUTPUT_DIR = Path("../data/processed")
 
-SHAP_OUTPUT_DIR = (
+MODEL_DIR = (
     OUTPUT_DIR
-    /
-    "shap"
+    / "final_model"
+)
+
+EVALUATION_DIR = (
+    OUTPUT_DIR
+    / "final_evaluation"
 )
 
 
-OUTPUT_DIR.mkdir(
+MODEL_DIR.mkdir(
     parents=True,
     exist_ok=True
 )
 
-SHAP_OUTPUT_DIR.mkdir(
+EVALUATION_DIR.mkdir(
     parents=True,
     exist_ok=True
 )
@@ -106,38 +120,32 @@ SHAP_OUTPUT_DIR.mkdir(
 
 TRAIN_OP_PATH = (
     DATA_DIR
-    /
-    "train_operational_readouts.csv"
+    / "train_operational_readouts.csv"
 )
 
 TRAIN_SPEC_PATH = (
     DATA_DIR
-    /
-    "train_specifications.csv"
+    / "train_specifications.csv"
 )
 
 TRAIN_TTE_PATH = (
     DATA_DIR
-    /
-    "train_tte.csv"
+    / "train_tte.csv"
 )
 
 VAL_OP_PATH = (
     DATA_DIR
-    /
-    "validation_operational_readouts.csv"
+    / "validation_operational_readouts.csv"
 )
 
 VAL_SPEC_PATH = (
     DATA_DIR
-    /
-    "validation_specifications.csv"
+    / "validation_specifications.csv"
 )
 
 VAL_LABEL_PATH = (
     DATA_DIR
-    /
-    "validation_labels.csv"
+    / "validation_labels.csv"
 )
 
 
@@ -146,17 +154,23 @@ VAL_LABEL_PATH = (
 # ============================================================
 
 required_files = [
+
     TRAIN_OP_PATH,
+
     TRAIN_SPEC_PATH,
+
     TRAIN_TTE_PATH,
+
     VAL_OP_PATH,
+
     VAL_SPEC_PATH,
-    VAL_LABEL_PATH
+
+    VAL_LABEL_PATH,
 ]
 
 
 print("=" * 80)
-print("CHECKING DATA FILES")
+print("FLEETCARE AI - FINAL CALIBRATED MODEL")
 print("=" * 80)
 
 
@@ -239,61 +253,19 @@ print(
 
 
 # ============================================================
-# 6. BASIC CHECKS
-# ============================================================
-
-train_vehicle_count = (
-    train_op[
-        "vehicle_id"
-    ]
-    .nunique()
-)
-
-validation_vehicle_count = (
-    val_op[
-        "vehicle_id"
-    ]
-    .nunique()
-)
-
-
-print(
-    "\nTraining vehicles:",
-    train_vehicle_count
-)
-
-print(
-    "Validation vehicles:",
-    validation_vehicle_count
-)
-
-
-assert (
-    train_vehicle_count
-    ==
-    train_spec[
-        "vehicle_id"
-    ].nunique()
-)
-
-assert (
-    train_vehicle_count
-    ==
-    train_tte[
-        "vehicle_id"
-    ].nunique()
-)
-
-
-# ============================================================
-# 7. IDENTIFY OPERATIONAL FEATURES
+# 6. IDENTIFY RAW OPERATIONAL FEATURES
 # ============================================================
 
 RAW_FEATURE_COLS = [
+
     col
+
     for col in train_op.columns
+
     if col not in [
+
         "vehicle_id",
+
         "time_step"
     ]
 ]
@@ -301,76 +273,13 @@ RAW_FEATURE_COLS = [
 
 print(
     "\nRaw operational features:",
-    len(
-        RAW_FEATURE_COLS
-    )
+    len(RAW_FEATURE_COLS)
 )
 
 
 # ============================================================
-# 8. SORT TIME SERIES
+# 7. MULTI-READOUT HISTORICAL FEATURE ENGINEERING
 # ============================================================
-
-train_op = (
-    train_op
-    .sort_values(
-        [
-            "vehicle_id",
-            "time_step"
-        ]
-    )
-    .reset_index(
-        drop=True
-    )
-)
-
-
-val_op = (
-    val_op
-    .sort_values(
-        [
-            "vehicle_id",
-            "time_step"
-        ]
-    )
-    .reset_index(
-        drop=True
-    )
-)
-
-
-# ============================================================
-# 9. MULTI-READOUT HISTORICAL FEATURE ENGINEERING
-# ============================================================
-#
-# For each operational feature:
-#
-# Current:
-#   x_t
-#
-# Previous:
-#   x_(t-1)
-#
-# Delta:
-#   x_t - x_(t-1)
-#
-# Rate:
-#   delta / time gap
-#
-# Longer history:
-#   change from 3 readouts ago
-#   change from 5 readouts ago
-#
-# Rolling history:
-#   mean over last 3 readouts
-#   std over last 3 readouts
-#   mean over last 5 readouts
-#   std over last 5 readouts
-#
-# NOTE:
-# These are readout windows, not fixed time windows.
-# ============================================================
-
 
 def create_history_features(
     df,
@@ -382,16 +291,20 @@ def create_history_features(
     )
 
     df = (
+
         df
+
         .sort_values(
             [
                 "vehicle_id",
                 "time_step"
             ]
         )
+
         .reset_index(
             drop=True
         )
+
         .copy()
     )
 
@@ -402,22 +315,23 @@ def create_history_features(
     )
 
 
-    # ========================================================
-    # TIME GAP
-    # ========================================================
+    # --------------------------------------------------------
+    # Time gap
+    # --------------------------------------------------------
 
     print(
         "  Creating time gap..."
     )
 
 
-    df[
-        "time_gap"
-    ] = (
+    df["time_gap"] = (
+
         grouped[
             "time_step"
         ]
+
         .diff()
+
         .astype(
             np.float32
         )
@@ -425,9 +339,11 @@ def create_history_features(
 
 
     safe_gap = (
+
         df[
             "time_gap"
         ]
+
         .replace(
             0,
             np.nan
@@ -435,9 +351,9 @@ def create_history_features(
     )
 
 
-    # ========================================================
-    # PREVIOUS VALUE
-    # ========================================================
+    # --------------------------------------------------------
+    # Previous values
+    # --------------------------------------------------------
 
     print(
         "  Creating previous values..."
@@ -445,10 +361,13 @@ def create_history_features(
 
 
     previous = (
+
         grouped[
             feature_cols
         ]
+
         .shift(1)
+
         .astype(
             np.float32
         )
@@ -456,19 +375,23 @@ def create_history_features(
 
 
     previous.columns = [
+
         f"{col}__prev"
+
         for col in feature_cols
     ]
 
 
-    # ========================================================
-    # CURRENT / PREVIOUS ARRAYS
-    # ========================================================
+    # --------------------------------------------------------
+    # Arrays
+    # --------------------------------------------------------
 
     current_array = (
+
         df[
             feature_cols
         ]
+
         .to_numpy(
             dtype=np.float32
         )
@@ -476,16 +399,18 @@ def create_history_features(
 
 
     previous_array = (
+
         previous
+
         .to_numpy(
             dtype=np.float32
         )
     )
 
 
-    # ========================================================
-    # DELTA
-    # ========================================================
+    # --------------------------------------------------------
+    # Delta
+    # --------------------------------------------------------
 
     print(
         "  Creating delta..."
@@ -493,36 +418,47 @@ def create_history_features(
 
 
     delta_array = (
+
         current_array
+
         -
+
         previous_array
     )
 
 
     delta = pd.DataFrame(
+
         delta_array,
+
         index=df.index,
+
         columns=[
+
             f"{col}__delta"
+
             for col in feature_cols
         ]
     )
 
 
-    # ========================================================
-    # RATE OF CHANGE
-    # ========================================================
+    # --------------------------------------------------------
+    # Rate
+    # --------------------------------------------------------
 
     print(
-        "  Creating rate of change..."
+        "  Creating rate..."
     )
 
 
     gap_array = (
+
         safe_gap
+
         .to_numpy(
             dtype=np.float32
         )
+
         [:, None]
     )
 
@@ -533,46 +469,60 @@ def create_history_features(
     ):
 
         rate_array = (
+
             delta_array
+
             /
+
             gap_array
         )
 
 
     rate = pd.DataFrame(
+
         rate_array,
+
         index=df.index,
+
         columns=[
+
             f"{col}__rate"
+
             for col in feature_cols
         ]
     )
 
 
     rate.replace(
+
         [
             np.inf,
             -np.inf
         ],
+
         np.nan,
+
         inplace=True
     )
 
 
-    # ========================================================
-    # CHANGE FROM 3 READOUTS AGO
-    # ========================================================
+    # --------------------------------------------------------
+    # Change from 3 readouts ago
+    # --------------------------------------------------------
 
     print(
-        "  Creating change from 3 readouts ago..."
+        "  Creating change3..."
     )
 
 
     lag3 = (
+
         grouped[
             feature_cols
         ]
+
         .shift(3)
+
         .astype(
             np.float32
         )
@@ -580,8 +530,11 @@ def create_history_features(
 
 
     change3_array = (
+
         current_array
+
         -
+
         lag3.to_numpy(
             dtype=np.float32
         )
@@ -589,10 +542,15 @@ def create_history_features(
 
 
     change3 = pd.DataFrame(
+
         change3_array,
+
         index=df.index,
+
         columns=[
+
             f"{col}__change3"
+
             for col in feature_cols
         ]
     )
@@ -604,20 +562,23 @@ def create_history_features(
     gc.collect()
 
 
-    # ========================================================
-    # CHANGE FROM 5 READOUTS AGO
-    # ========================================================
+    # --------------------------------------------------------
+    # Change from 5 readouts ago
+    # --------------------------------------------------------
 
     print(
-        "  Creating change from 5 readouts ago..."
+        "  Creating change5..."
     )
 
 
     lag5 = (
+
         grouped[
             feature_cols
         ]
+
         .shift(5)
+
         .astype(
             np.float32
         )
@@ -625,8 +586,11 @@ def create_history_features(
 
 
     change5_array = (
+
         current_array
+
         -
+
         lag5.to_numpy(
             dtype=np.float32
         )
@@ -634,10 +598,15 @@ def create_history_features(
 
 
     change5 = pd.DataFrame(
+
         change5_array,
+
         index=df.index,
+
         columns=[
+
             f"{col}__change5"
+
             for col in feature_cols
         ]
     )
@@ -649,9 +618,9 @@ def create_history_features(
     gc.collect()
 
 
-    # ========================================================
-    # ROLLING MEAN — LAST 3
-    # ========================================================
+    # --------------------------------------------------------
+    # Rolling mean 3
+    # --------------------------------------------------------
 
     print(
         "  Creating rolling mean 3..."
@@ -659,21 +628,27 @@ def create_history_features(
 
 
     rolling_mean3 = (
+
         grouped[
             feature_cols
         ]
+
         .rolling(
             window=3,
             min_periods=1
         )
+
         .mean()
+
         .reset_index(
             level=0,
             drop=True
         )
+
         .reindex(
             df.index
         )
+
         .astype(
             np.float32
         )
@@ -681,14 +656,16 @@ def create_history_features(
 
 
     rolling_mean3.columns = [
+
         f"{col}__mean3"
+
         for col in feature_cols
     ]
 
 
-    # ========================================================
-    # ROLLING STD — LAST 3
-    # ========================================================
+    # --------------------------------------------------------
+    # Rolling std 3
+    # --------------------------------------------------------
 
     print(
         "  Creating rolling std 3..."
@@ -696,21 +673,27 @@ def create_history_features(
 
 
     rolling_std3 = (
+
         grouped[
             feature_cols
         ]
+
         .rolling(
             window=3,
             min_periods=2
         )
+
         .std()
+
         .reset_index(
             level=0,
             drop=True
         )
+
         .reindex(
             df.index
         )
+
         .astype(
             np.float32
         )
@@ -718,14 +701,16 @@ def create_history_features(
 
 
     rolling_std3.columns = [
+
         f"{col}__std3"
+
         for col in feature_cols
     ]
 
 
-    # ========================================================
-    # ROLLING MEAN — LAST 5
-    # ========================================================
+    # --------------------------------------------------------
+    # Rolling mean 5
+    # --------------------------------------------------------
 
     print(
         "  Creating rolling mean 5..."
@@ -733,21 +718,27 @@ def create_history_features(
 
 
     rolling_mean5 = (
+
         grouped[
             feature_cols
         ]
+
         .rolling(
             window=5,
             min_periods=1
         )
+
         .mean()
+
         .reset_index(
             level=0,
             drop=True
         )
+
         .reindex(
             df.index
         )
+
         .astype(
             np.float32
         )
@@ -755,14 +746,16 @@ def create_history_features(
 
 
     rolling_mean5.columns = [
+
         f"{col}__mean5"
+
         for col in feature_cols
     ]
 
 
-    # ========================================================
-    # ROLLING STD — LAST 5
-    # ========================================================
+    # --------------------------------------------------------
+    # Rolling std 5
+    # --------------------------------------------------------
 
     print(
         "  Creating rolling std 5..."
@@ -770,21 +763,27 @@ def create_history_features(
 
 
     rolling_std5 = (
+
         grouped[
             feature_cols
         ]
+
         .rolling(
             window=5,
             min_periods=2
         )
+
         .std()
+
         .reset_index(
             level=0,
             drop=True
         )
+
         .reindex(
             df.index
         )
+
         .astype(
             np.float32
         )
@@ -792,14 +791,16 @@ def create_history_features(
 
 
     rolling_std5.columns = [
+
         f"{col}__std5"
+
         for col in feature_cols
     ]
 
 
-    # ========================================================
-    # COMBINE
-    # ========================================================
+    # --------------------------------------------------------
+    # Combine
+    # --------------------------------------------------------
 
     print(
         "  Combining historical features..."
@@ -807,28 +808,42 @@ def create_history_features(
 
 
     result = pd.concat(
+
         [
             df,
+
             previous,
+
             delta,
+
             rate,
+
             change3,
+
             change5,
+
             rolling_mean3,
+
             rolling_std3,
+
             rolling_mean5,
+
             rolling_std5
         ],
+
         axis=1
     )
 
 
     result.replace(
+
         [
             np.inf,
             -np.inf
         ],
+
         np.nan,
+
         inplace=True
     )
 
@@ -843,7 +858,7 @@ def create_history_features(
 
 
 # ============================================================
-# 10. CREATE TRAINING HISTORY FEATURES
+# 8. CREATE TRAIN / VALIDATION HISTORY
 # ============================================================
 
 print("\n" + "=" * 80)
@@ -851,28 +866,20 @@ print("CREATING TRAIN HISTORY FEATURES")
 print("=" * 80)
 
 
-train_history = (
-    create_history_features(
-        train_op,
-        RAW_FEATURE_COLS
-    )
+train_history = create_history_features(
+    train_op,
+    RAW_FEATURE_COLS
 )
 
-
-# ============================================================
-# 11. CREATE VALIDATION HISTORY FEATURES
-# ============================================================
 
 print("\n" + "=" * 80)
 print("CREATING VALIDATION HISTORY FEATURES")
 print("=" * 80)
 
 
-val_history = (
-    create_history_features(
-        val_op,
-        RAW_FEATURE_COLS
-    )
+val_history = create_history_features(
+    val_op,
+    RAW_FEATURE_COLS
 )
 
 
@@ -883,11 +890,13 @@ gc.collect()
 
 
 # ============================================================
-# 12. MERGE TTE
+# 9. CREATE CENSORING-AWARE TRAINING LABELS
 # ============================================================
 
 train_full = (
+
     train_history
+
     .merge(
         train_tte,
         on="vehicle_id",
@@ -897,34 +906,23 @@ train_full = (
 )
 
 
-# ============================================================
-# 13. TIME TO ENDPOINT
-# ============================================================
+train_full["time_to_endpoint"] = (
 
-train_full[
-    "time_to_endpoint"
-] = (
     train_full[
         "length_of_study_time_step"
     ]
+
     -
+
     train_full[
         "time_step"
     ]
 )
 
 
-# ============================================================
-# 14. C0-C4 LABEL FUNCTION
-# ============================================================
+def tte_to_class(tte):
 
-def tte_to_class(
-    tte
-):
-
-    if pd.isna(
-        tte
-    ):
+    if pd.isna(tte):
 
         return np.nan
 
@@ -957,158 +955,163 @@ def tte_to_class(
     return 0
 
 
-# ============================================================
-# 15. CREATE TRAINING LABELS
-# ============================================================
-
-train_full[
-    "class_label"
-] = np.nan
+train_full["class_label"] = np.nan
 
 
-# ------------------------------------------------------------
 # Repair vehicles
-# ------------------------------------------------------------
 
 repair_mask = (
+
     train_full[
         "in_study_repair"
     ]
+
     == 1
 )
 
 
 train_full.loc[
+
     repair_mask,
+
     "class_label"
+
 ] = (
+
     train_full.loc[
         repair_mask,
         "time_to_endpoint"
     ]
+
     .apply(
         tte_to_class
     )
 )
 
 
-# ------------------------------------------------------------
-# Non-repair vehicles
-#
-# Only use C0 when there are >48 observed repair-free
-# time units remaining.
-# ------------------------------------------------------------
+# Non-repair vehicles:
+# Only safely label C0 when >48 repair-free units remain
 
 safe_non_repair_mask = (
+
     (
         train_full[
             "in_study_repair"
         ]
+
         == 0
     )
+
     &
+
     (
         train_full[
             "time_to_endpoint"
         ]
+
         > 48
     )
 )
 
 
 train_full.loc[
+
     safe_non_repair_mask,
+
     "class_label"
+
 ] = 0
 
 
-# ============================================================
-# 16. REMOVE UNKNOWN LABELS
-# ============================================================
-
 candidate_train = (
+
     train_full
+
     .dropna(
         subset=[
             "class_label"
         ]
     )
+
     .copy()
 )
 
 
-candidate_train[
-    "class_label"
-] = (
+candidate_train["class_label"] = (
+
     candidate_train[
         "class_label"
     ]
+
     .astype(int)
 )
 
 
-print("\n" + "=" * 80)
-print("ELIGIBLE TRAINING OBSERVATIONS")
-print("=" * 80)
-
+print("\nEligible training observations:")
 
 print(
+
     candidate_train[
         "class_label"
     ]
+
     .value_counts()
+
     .sort_index()
 )
 
 
 del train_full
+del train_history
 
 gc.collect()
 
 
 # ============================================================
-# 17. VEHICLE-AWARE SAMPLING
+# 10. VEHICLE-AWARE SAMPLING
 # ============================================================
-#
-# Repair vehicle:
-#
-# Maximum one observation per available C0-C4 class.
-#
-# Non-repair vehicle:
-#
-# One safely-labelled C0 observation.
-#
-# ============================================================
+
+print("\n" + "=" * 80)
+print("VEHICLE-AWARE SAMPLING")
+print("=" * 80)
 
 
 repair_candidates = (
+
     candidate_train[
+
         candidate_train[
             "in_study_repair"
         ]
+
         == 1
     ]
+
     .copy()
 )
 
 
 non_repair_candidates = (
+
     candidate_train[
+
         candidate_train[
             "in_study_repair"
         ]
+
         == 0
     ]
+
     .copy()
 )
 
 
-# ------------------------------------------------------------
-# Repair vehicles
-# ------------------------------------------------------------
+# One observation per repaired vehicle per available class
 
 repair_sampled = (
+
     repair_candidates
+
     .groupby(
         [
             "vehicle_id",
@@ -1116,89 +1119,94 @@ repair_sampled = (
         ],
         group_keys=False
     )
+
     .sample(
         n=1,
         random_state=RANDOM_STATE
     )
+
     .reset_index(
         drop=True
     )
 )
 
 
-# ------------------------------------------------------------
-# Non-repair vehicles
-# ------------------------------------------------------------
+# One safe C0 observation per non-repair vehicle
 
 non_repair_sampled = (
+
     non_repair_candidates
+
     .groupby(
         "vehicle_id",
         group_keys=False
     )
+
     .sample(
         n=1,
         random_state=RANDOM_STATE
     )
+
     .reset_index(
         drop=True
     )
 )
 
 
-# ------------------------------------------------------------
-# Combine
-# ------------------------------------------------------------
-
 train_sampled = pd.concat(
+
     [
         repair_sampled,
         non_repair_sampled
     ],
+
     ignore_index=True
 )
 
 
 train_sampled = (
+
     train_sampled
+
     .sample(
         frac=1,
         random_state=RANDOM_STATE
     )
+
     .reset_index(
         drop=True
     )
 )
 
 
-print("\n" + "=" * 80)
-print("VEHICLE-AWARE TRAINING DISTRIBUTION")
-print("=" * 80)
+print(
+    "Training rows:",
+    len(train_sampled)
+)
 
 
 print(
+    "Unique training vehicles:",
+    train_sampled[
+        "vehicle_id"
+    ].nunique()
+)
+
+
+print(
+    "\nVehicle-aware class distribution:"
+)
+
+
+print(
+
     train_sampled[
         "class_label"
     ]
+
     .value_counts()
+
     .sort_index()
-)
-
-
-print(
-    "\nTraining rows:",
-    len(
-        train_sampled
-    )
-)
-
-
-print(
-    "Unique vehicles:",
-    train_sampled[
-        "vehicle_id"
-    ]
-    .nunique()
 )
 
 
@@ -1212,11 +1220,13 @@ gc.collect()
 
 
 # ============================================================
-# 18. JOIN VEHICLE SPECIFICATIONS
+# 11. ADD VEHICLE SPECIFICATIONS
 # ============================================================
 
 train_sampled = (
+
     train_sampled
+
     .merge(
         train_spec,
         on="vehicle_id",
@@ -1227,26 +1237,28 @@ train_sampled = (
 
 
 # ============================================================
-# 19. BUILD VALIDATION TABLE
-# ============================================================
-#
-# Validation data are already truncated by the challenge.
-# Therefore use the last available readout.
+# 12. BUILD OFFICIAL VALIDATION TABLE
 # ============================================================
 
 val_last = (
+
     val_history
+
     .groupby(
         "vehicle_id",
         sort=False
     )
+
     .tail(1)
+
     .copy()
 )
 
 
 val_last = (
+
     val_last
+
     .merge(
         val_spec,
         on="vehicle_id",
@@ -1257,7 +1269,9 @@ val_last = (
 
 
 val_last = (
+
     val_last
+
     .merge(
         val_labels,
         on="vehicle_id",
@@ -1272,35 +1286,45 @@ del val_history
 gc.collect()
 
 
-print("\n" + "=" * 80)
-print("VALIDATION DISTRIBUTION")
-print("=" * 80)
+print(
+    "\nOfficial Validation distribution:"
+)
 
 
 print(
+
     val_last[
         "class_label"
     ]
+
     .value_counts()
+
     .sort_index()
 )
 
 
 # ============================================================
-# 20. BUILD X / Y
+# 13. BUILD X / Y
 # ============================================================
 
 NON_FEATURE_COLS = [
+
     "vehicle_id",
+
     "class_label",
+
     "length_of_study_time_step",
+
     "in_study_repair",
+
     "time_to_endpoint"
 ]
 
 
 X_train = (
+
     train_sampled
+
     .drop(
         columns=NON_FEATURE_COLS,
         errors="ignore"
@@ -1309,16 +1333,21 @@ X_train = (
 
 
 y_train = (
+
     train_sampled[
         "class_label"
     ]
+
     .astype(int)
+
     .copy()
 )
 
 
 X_val = (
+
     val_last
+
     .drop(
         columns=[
             "vehicle_id",
@@ -1330,89 +1359,48 @@ X_val = (
 
 
 y_val = (
+
     val_last[
         "class_label"
     ]
+
     .astype(int)
+
     .copy()
 )
 
 
-# ============================================================
-# 21. ALIGN FEATURES
-# ============================================================
+# Make validation columns exactly match training
 
-train_only = (
-    set(
-        X_train.columns
-    )
-    -
-    set(
-        X_val.columns
-    )
+X_val = X_val.reindex(
+    columns=X_train.columns
 )
-
-
-val_only = (
-    set(
-        X_val.columns
-    )
-    -
-    set(
-        X_train.columns
-    )
-)
-
-
-print(
-    "\nTrain-only columns:",
-    train_only
-)
-
-print(
-    "Validation-only columns:",
-    val_only
-)
-
-
-assert len(
-    train_only
-) == 0
-
-
-assert len(
-    val_only
-) == 0
-
-
-X_val = X_val[
-    X_train.columns
-]
 
 
 assert (
+
     list(
         X_train.columns
     )
+
     ==
+
     list(
         X_val.columns
     )
 )
 
 
-print(
-    "✓ Train and validation features aligned."
-)
-
-
 # ============================================================
-# 22. FEATURE TYPES
+# 14. FEATURE TYPES / PREPROCESSING
 # ============================================================
 
 categorical_cols = [
+
     col
+
     for col in X_train.columns
+
     if col.startswith(
         "Spec_"
     )
@@ -1420,41 +1408,21 @@ categorical_cols = [
 
 
 numeric_cols = [
+
     col
+
     for col in X_train.columns
+
     if col not in categorical_cols
 ]
 
 
-print(
-    "\nNumeric features:",
-    len(
-        numeric_cols
-    )
-)
-
-print(
-    "Categorical features:",
-    len(
-        categorical_cols
-    )
-)
-
-print(
-    "Total raw model features:",
-    len(
-        X_train.columns
-    )
-)
-
-
-# ============================================================
-# 23. PREPROCESSING
-# ============================================================
-
 numeric_transformer = Pipeline([
+
     (
+
         "imputer",
+
         SimpleImputer(
             strategy="median"
         )
@@ -1463,14 +1431,20 @@ numeric_transformer = Pipeline([
 
 
 categorical_transformer = Pipeline([
+
     (
+
         "imputer",
+
         SimpleImputer(
             strategy="most_frequent"
         )
     ),
+
     (
+
         "onehot",
+
         OneHotEncoder(
             handle_unknown="ignore"
         )
@@ -1479,29 +1453,29 @@ categorical_transformer = Pipeline([
 
 
 preprocessor = ColumnTransformer([
+
     (
+
         "numeric",
+
         numeric_transformer,
+
         numeric_cols
     ),
+
     (
+
         "categorical",
+
         categorical_transformer,
+
         categorical_cols
     )
 ])
 
 
 # ============================================================
-# 24. XGBOOST MODEL
-# ============================================================
-#
-# Current selected configuration:
-#
-# Vehicle-aware
-# Multi-readout history
-# No additional class weighting
-#
+# 15. XGBOOST
 # ============================================================
 
 history_xgb = XGBClassifier(
@@ -1537,267 +1511,985 @@ history_xgb = XGBClassifier(
 
 
 history_pipeline = Pipeline([
+
     (
+
         "preprocessor",
+
         preprocessor
     ),
+
     (
+
         "classifier",
+
         history_xgb
     )
 ])
 
 
 # ============================================================
-# 25. TRAIN MODEL
+# 16. CREATE VEHICLE-LEVEL OOF PROBABILITIES
+# ============================================================
+#
+# Calibration is fitted using OOF predictions.
+#
+# IMPORTANT:
+# GroupKFold uses vehicle_id.
+# Therefore observations from one vehicle never appear
+# simultaneously in fold training and fold holdout.
+#
+# Official Validation is NEVER used here.
 # ============================================================
 
 print("\n" + "=" * 80)
-print("TRAINING HISTORY XGBOOST")
+print("CREATING OOF PROBABILITIES FOR CALIBRATION")
+print("=" * 80)
+
+
+groups = (
+
+    train_sampled[
+        "vehicle_id"
+    ]
+
+    .to_numpy()
+)
+
+
+y_train_array = (
+
+    y_train
+
+    .to_numpy()
+)
+
+
+oof_raw_proba = np.zeros(
+
+    (
+        len(X_train),
+        N_CLASSES
+    ),
+
+    dtype=np.float64
+)
+
+
+oof_filled = np.zeros(
+
+    len(X_train),
+
+    dtype=bool
+)
+
+
+group_kfold = GroupKFold(
+    n_splits=N_CALIBRATION_FOLDS
+)
+
+
+for fold, (
+    fit_idx,
+    holdout_idx
+) in enumerate(
+
+    group_kfold.split(
+
+        X_train,
+
+        y_train_array,
+
+        groups=groups
+    ),
+
+    start=1
+):
+
+    print(
+        f"OOF fold "
+        f"{fold}/{N_CALIBRATION_FOLDS}"
+    )
+
+
+    fold_pipeline = clone(
+        history_pipeline
+    )
+
+
+    X_fold_train = (
+
+        X_train
+
+        .iloc[
+            fit_idx
+        ]
+    )
+
+
+    y_fold_train = (
+
+        y_train
+
+        .iloc[
+            fit_idx
+        ]
+    )
+
+
+    X_fold_holdout = (
+
+        X_train
+
+        .iloc[
+            holdout_idx
+        ]
+    )
+
+
+    fold_pipeline.fit(
+
+        X_fold_train,
+
+        y_fold_train
+    )
+
+
+    fold_proba = (
+
+        fold_pipeline
+
+        .predict_proba(
+            X_fold_holdout
+        )
+    )
+
+
+    aligned_proba = np.zeros(
+
+        (
+            len(holdout_idx),
+            N_CLASSES
+        ),
+
+        dtype=np.float64
+    )
+
+
+    fold_classes = (
+
+        fold_pipeline
+
+        .named_steps[
+            "classifier"
+        ]
+
+        .classes_
+
+        .astype(int)
+    )
+
+
+    aligned_proba[
+        :,
+        fold_classes
+    ] = fold_proba
+
+
+    oof_raw_proba[
+        holdout_idx
+    ] = aligned_proba
+
+
+    oof_filled[
+        holdout_idx
+    ] = True
+
+
+    del fold_pipeline
+
+    gc.collect()
+
+
+assert oof_filled.all()
+
+
+print(
+    "✓ OOF probabilities created:",
+    oof_raw_proba.shape
+)
+
+
+# ============================================================
+# 17. CALIBRATION FUNCTIONS
+# ============================================================
+
+def normalize_probabilities(
+    probabilities
+):
+
+    probabilities = np.asarray(
+
+        probabilities,
+
+        dtype=np.float64
+    )
+
+
+    probabilities = np.clip(
+
+        probabilities,
+
+        EPSILON,
+
+        1.0
+    )
+
+
+    probabilities = (
+
+        probabilities
+
+        /
+
+        probabilities.sum(
+            axis=1,
+            keepdims=True
+        )
+    )
+
+
+    return probabilities
+
+
+def logit_features(
+    probabilities
+):
+
+    probabilities = (
+
+        normalize_probabilities(
+            probabilities
+        )
+    )
+
+
+    return np.log(
+
+        np.clip(
+
+            probabilities,
+
+            EPSILON,
+
+            1.0
+        )
+    )
+
+
+def calibrated_proba(
+
+    calibrator,
+
+    raw_proba
+):
+
+    predicted = (
+
+        calibrator
+
+        .predict_proba(
+
+            logit_features(
+                raw_proba
+            )
+        )
+    )
+
+
+    aligned = np.zeros(
+
+        (
+            len(predicted),
+            N_CLASSES
+        ),
+
+        dtype=np.float64
+    )
+
+
+    aligned[
+        :,
+        calibrator.classes_.astype(int)
+    ] = predicted
+
+
+    return normalize_probabilities(
+        aligned
+    )
+
+
+# ============================================================
+# 18. FIT LOGIT CALIBRATOR
+# ============================================================
+
+print("\n" + "=" * 80)
+print("FITTING LOGIT CALIBRATOR")
+print("=" * 80)
+
+
+oof_raw_proba = (
+
+    normalize_probabilities(
+        oof_raw_proba
+    )
+)
+
+
+calibrator = LogisticRegression(
+
+    solver="lbfgs",
+
+    max_iter=2000,
+
+    random_state=RANDOM_STATE
+)
+
+
+calibrator.fit(
+
+    logit_features(
+        oof_raw_proba
+    ),
+
+    y_train_array
+)
+
+
+print(
+    "✓ Calibrator fitted"
+)
+
+
+print(
+    "Calibrator classes:",
+    calibrator.classes_
+)
+
+
+# ============================================================
+# 19. TRAIN FINAL MODEL ON ALL VEHICLE-AWARE TRAINING DATA
+# ============================================================
+
+print("\n" + "=" * 80)
+print("TRAINING FINAL HISTORY XGBOOST")
 print("=" * 80)
 
 
 history_pipeline.fit(
+
     X_train,
+
     y_train
 )
 
 
 print(
-    "✓ Training complete"
+    "✓ Final model training complete"
 )
 
 
 # ============================================================
-# 26. PREDICT
+# 20. OFFICIAL VALIDATION - RAW + CALIBRATED
 # ============================================================
 
-y_pred = (
-    history_pipeline
-    .predict(
-        X_val
-    )
-    .astype(int)
-)
+print("\n" + "=" * 80)
+print("OFFICIAL VALIDATION")
+print("=" * 80)
 
 
-y_proba = (
+raw_y_proba = (
+
     history_pipeline
+
     .predict_proba(
         X_val
     )
 )
 
 
-assert (
-    y_proba.shape
-    ==
-    (
-        len(
-            X_val
-        ),
-        5
+raw_y_proba = (
+
+    normalize_probabilities(
+        raw_y_proba
     )
 )
 
 
+calibrated_y_proba = (
+
+    calibrated_proba(
+
+        calibrator,
+
+        raw_y_proba
+    )
+)
+
+
+raw_y_pred = np.argmax(
+
+    raw_y_proba,
+
+    axis=1
+)
+
+
+calibrated_y_pred = np.argmax(
+
+    calibrated_y_proba,
+
+    axis=1
+)
+
+
 # ============================================================
-# 27. MODEL EVALUATION
+# 21. EVALUATION FUNCTION
 # ============================================================
 
-print("\n" + "=" * 80)
-print("CLASSIFICATION REPORT")
-print("=" * 80)
+def evaluate_classification(
+
+    name,
+
+    y_true,
+
+    y_pred,
+
+    probabilities
+):
+
+    accuracy = accuracy_score(
+        y_true,
+        y_pred
+    )
 
 
-print(
-    classification_report(
-        y_val,
+    macro_precision = precision_score(
+
+        y_true,
+
         y_pred,
 
-        labels=[
-            0,
-            1,
-            2,
-            3,
-            4
-        ],
+        labels=CLASS_IDS,
 
-        target_names=[
-            "C0",
-            "C1",
-            "C2",
-            "C3",
-            "C4"
-        ],
+        average="macro",
+
+        zero_division=0
+    )
+
+
+    macro_recall = recall_score(
+
+        y_true,
+
+        y_pred,
+
+        labels=CLASS_IDS,
+
+        average="macro",
+
+        zero_division=0
+    )
+
+
+    macro_f1 = f1_score(
+
+        y_true,
+
+        y_pred,
+
+        labels=CLASS_IDS,
+
+        average="macro",
+
+        zero_division=0
+    )
+
+
+    weighted_f1 = f1_score(
+
+        y_true,
+
+        y_pred,
+
+        labels=CLASS_IDS,
+
+        average="weighted",
+
+        zero_division=0
+    )
+
+
+    loss = log_loss(
+
+        y_true,
+
+        probabilities,
+
+        labels=CLASS_IDS
+    )
+
+
+    report = classification_report(
+
+        y_true,
+
+        y_pred,
+
+        labels=CLASS_IDS,
+
+        target_names=CLASS_NAMES,
 
         digits=4,
 
         zero_division=0
     )
-)
 
 
-accuracy = (
-    accuracy_score(
-        y_val,
-        y_pred
+    print(
+        "\n" + "=" * 80
     )
-)
 
-
-macro_f1 = (
-    f1_score(
-        y_val,
-        y_pred,
-        average="macro"
+    print(
+        name
     )
-)
 
-
-weighted_f1 = (
-    f1_score(
-        y_val,
-        y_pred,
-        average="weighted"
+    print(
+        "=" * 80
     )
-)
+
+    print(report)
 
 
-report = (
-    classification_report(
-        y_val,
-        y_pred,
-
-        labels=[
-            0,
-            1,
-            2,
-            3,
-            4
-        ],
-
-        target_names=[
-            "C0",
-            "C1",
-            "C2",
-            "C3",
-            "C4"
-        ],
-
-        output_dict=True,
-
-        zero_division=0
+    print(
+        f"Accuracy:        "
+        f"{accuracy:.4f}"
     )
-)
 
-
-c4_precision = (
-    report[
-        "C4"
-    ][
-        "precision"
-    ]
-)
-
-
-c4_recall = (
-    report[
-        "C4"
-    ][
-        "recall"
-    ]
-)
-
-
-c4_f1 = (
-    report[
-        "C4"
-    ][
-        "f1-score"
-    ]
-)
-
-
-print(
-    "Accuracy:",
-    round(
-        accuracy,
-        4
+    print(
+        f"Macro Precision: "
+        f"{macro_precision:.4f}"
     )
-)
 
-print(
-    "Macro F1:",
-    round(
-        macro_f1,
-        4
+    print(
+        f"Macro Recall:    "
+        f"{macro_recall:.4f}"
     )
-)
 
-print(
-    "Weighted F1:",
-    round(
-        weighted_f1,
-        4
+    print(
+        f"Macro F1:        "
+        f"{macro_f1:.4f}"
     )
-)
 
-print(
-    "C4 Precision:",
-    round(
-        c4_precision,
-        4
+    print(
+        f"Weighted F1:     "
+        f"{weighted_f1:.4f}"
     )
-)
 
-print(
-    "C4 Recall:",
-    round(
-        c4_recall,
-        4
+    print(
+        f"Log Loss:        "
+        f"{loss:.4f}"
     )
-)
 
-print(
-    "C4 F1:",
-    round(
-        c4_f1,
-        4
-    )
-)
+
+    return {
+
+        "accuracy":
+            float(accuracy),
+
+        "macro_precision":
+            float(macro_precision),
+
+        "macro_recall":
+            float(macro_recall),
+
+        "macro_f1":
+            float(macro_f1),
+
+        "weighted_f1":
+            float(weighted_f1),
+
+        "log_loss":
+            float(loss)
+    }
 
 
 # ============================================================
-# 28. CONFUSION MATRIX
+# 22. RAW EVALUATION
 # ============================================================
 
-cm = confusion_matrix(
+raw_metrics = evaluate_classification(
+
+    "RAW MODEL",
+
     y_val,
-    y_pred,
 
-    labels=[
-        0,
-        1,
-        2,
-        3,
-        4
-    ]
+    raw_y_pred,
+
+    raw_y_proba
+)
+
+
+# ============================================================
+# 23. CALIBRATED EVALUATION
+# ============================================================
+
+calibrated_metrics = evaluate_classification(
+
+    "CALIBRATED MODEL",
+
+    y_val,
+
+    calibrated_y_pred,
+
+    calibrated_y_proba
+)
+
+
+# ============================================================
+# 24. RISK EVALUATION
+# ============================================================
+
+def evaluate_risk_horizons(
+
+    labels,
+
+    probabilities
+):
+
+    labels = np.asarray(
+        labels
+    )
+
+
+    rows = []
+
+
+    for (
+        horizon,
+        positive_classes
+    ) in HORIZONS.items():
+
+
+        binary = np.isin(
+
+            labels,
+
+            positive_classes
+        ).astype(int)
+
+
+        score = (
+
+            probabilities[
+                :,
+                positive_classes
+            ]
+
+            .sum(
+                axis=1
+            )
+        )
+
+
+        ap = average_precision_score(
+
+            binary,
+
+            score
+        )
+
+
+        auc = roc_auc_score(
+
+            binary,
+
+            score
+        )
+
+
+        # Top 5%
+
+        k5 = max(
+
+            1,
+
+            int(
+                np.ceil(
+                    len(labels)
+                    * 0.05
+                )
+            )
+        )
+
+
+        top5_idx = np.argsort(
+
+            -score,
+
+            kind="stable"
+
+        )[:k5]
+
+
+        top5_recall = (
+
+            binary[
+                top5_idx
+            ].sum()
+
+            /
+
+            binary.sum()
+        )
+
+
+        top5_precision = (
+
+            binary[
+                top5_idx
+            ].mean()
+        )
+
+
+        # Top 10%
+
+        k10 = max(
+
+            1,
+
+            int(
+                np.ceil(
+                    len(labels)
+                    * 0.10
+                )
+            )
+        )
+
+
+        top10_idx = np.argsort(
+
+            -score,
+
+            kind="stable"
+
+        )[:k10]
+
+
+        top10_recall = (
+
+            binary[
+                top10_idx
+            ].sum()
+
+            /
+
+            binary.sum()
+        )
+
+
+        top10_precision = (
+
+            binary[
+                top10_idx
+            ].mean()
+        )
+
+
+        rows.append({
+
+            "Horizon":
+                horizon,
+
+            "AveragePrecision":
+                float(ap),
+
+            "ROCAUC":
+                float(auc),
+
+            "Top5Recall":
+                float(top5_recall),
+
+            "Top5Precision":
+                float(top5_precision),
+
+            "Top10Recall":
+                float(top10_recall),
+
+            "Top10Precision":
+                float(top10_precision)
+        })
+
+
+    return pd.DataFrame(
+        rows
+    )
+
+
+raw_risk_metrics = (
+
+    evaluate_risk_horizons(
+
+        y_val,
+
+        raw_y_proba
+    )
+)
+
+
+calibrated_risk_metrics = (
+
+    evaluate_risk_horizons(
+
+        y_val,
+
+        calibrated_y_proba
+    )
 )
 
 
 print("\n" + "=" * 80)
-print("CONFUSION MATRIX")
+print("RAW RISK METRICS")
 print("=" * 80)
 
+print(
+
+    raw_risk_metrics
+
+    .to_string(
+        index=False
+    )
+)
+
+
+print("\n" + "=" * 80)
+print("CALIBRATED RISK METRICS")
+print("=" * 80)
 
 print(
-    cm
+
+    calibrated_risk_metrics
+
+    .to_string(
+        index=False
+    )
+)
+
+
+raw_risk_metrics.to_csv(
+
+    EVALUATION_DIR
+    / "raw_risk_metrics.csv",
+
+    index=False
+)
+
+
+calibrated_risk_metrics.to_csv(
+
+    EVALUATION_DIR
+    / "calibrated_risk_metrics.csv",
+
+    index=False
 )
 
 
 # ============================================================
-# 29. SAVE VALIDATION PREDICTIONS
+# 25. CONFUSION MATRICES
+# ============================================================
+
+for (
+    name,
+    predictions
+) in [
+
+    (
+        "raw",
+        raw_y_pred
+    ),
+
+    (
+        "calibrated",
+        calibrated_y_pred
+    )
+]:
+
+    cm = confusion_matrix(
+
+        y_val,
+
+        predictions,
+
+        labels=CLASS_IDS
+    )
+
+
+    print(
+        f"\n{name.upper()} CONFUSION MATRIX"
+    )
+
+    print(cm)
+
+
+    fig, ax = plt.subplots(
+        figsize=(8, 7)
+    )
+
+
+    display = ConfusionMatrixDisplay(
+
+        confusion_matrix=cm,
+
+        display_labels=CLASS_NAMES
+    )
+
+
+    display.plot(
+
+        ax=ax,
+
+        values_format="d",
+
+        colorbar=False
+    )
+
+
+    ax.set_title(
+
+        f"FleetCare AI - "
+        f"{name.capitalize()} Confusion Matrix"
+    )
+
+
+    plt.tight_layout()
+
+
+    plt.savefig(
+
+        EVALUATION_DIR
+        / f"{name}_confusion_matrix.png",
+
+        dpi=300,
+
+        bbox_inches="tight"
+    )
+
+
+    plt.close()
+
+
+# ============================================================
+# 26. SAVE VALIDATION PREDICTIONS
 # ============================================================
 
 validation_predictions = pd.DataFrame({
@@ -1805,42 +2497,73 @@ validation_predictions = pd.DataFrame({
     "vehicle_id":
         val_last[
             "vehicle_id"
-        ]
-        .to_numpy(),
+        ].to_numpy(),
 
     "actual_class":
-        y_val
-        .to_numpy(),
+        y_val.to_numpy(),
 
-    "predicted_class":
-        y_pred,
+    "raw_predicted_class":
+        raw_y_pred,
+
+    "calibrated_predicted_class":
+        calibrated_y_pred,
+
+    "raw_P_C0":
+        raw_y_proba[:, 0],
+
+    "raw_P_C1":
+        raw_y_proba[:, 1],
+
+    "raw_P_C2":
+        raw_y_proba[:, 2],
+
+    "raw_P_C3":
+        raw_y_proba[:, 3],
+
+    "raw_P_C4":
+        raw_y_proba[:, 4],
 
     "P_C0":
-        y_proba[
-            :,
-            0
-        ],
+        calibrated_y_proba[:, 0],
 
     "P_C1":
-        y_proba[
-            :,
-            1
-        ],
+        calibrated_y_proba[:, 1],
 
     "P_C2":
-        y_proba[
-            :,
-            2
-        ],
+        calibrated_y_proba[:, 2],
 
     "P_C3":
-        y_proba[
-            :,
-            3
-        ],
+        calibrated_y_proba[:, 3],
 
     "P_C4":
-        y_proba[
+        calibrated_y_proba[:, 4],
+
+    "Risk48":
+        calibrated_y_proba[
+            :,
+            1:
+        ].sum(
+            axis=1
+        ),
+
+    "Risk24":
+        calibrated_y_proba[
+            :,
+            2:
+        ].sum(
+            axis=1
+        ),
+
+    "Risk12":
+        calibrated_y_proba[
+            :,
+            3:
+        ].sum(
+            axis=1
+        ),
+
+    "Risk6":
+        calibrated_y_proba[
             :,
             4
         ]
@@ -1849,933 +2572,412 @@ validation_predictions = pd.DataFrame({
 
 validation_predictions.to_csv(
 
-    OUTPUT_DIR
-    /
-    "history_xgboost_validation_predictions.csv",
+    EVALUATION_DIR
+    / "final_validation_predictions.csv",
 
     index=False
 )
 
 
 # ============================================================
-# 30. SHAP
+# 27. SAVE FINAL MODEL
 # ============================================================
 
 print("\n" + "=" * 80)
-print("SHAP EXPLAINABILITY")
+print("SAVING FINAL MODEL")
 print("=" * 80)
 
 
-# ------------------------------------------------------------
-# Get fitted model components
-# ------------------------------------------------------------
+MODEL_PATH = (
 
-fitted_preprocessor = (
-    history_pipeline
-    .named_steps[
-        "preprocessor"
-    ]
+    MODEL_DIR
+
+    / "fleetcare_vehicle_aware_history_xgb.joblib"
 )
 
 
-fitted_model = (
-    history_pipeline
-    .named_steps[
-        "classifier"
-    ]
+CALIBRATOR_PATH = (
+
+    MODEL_DIR
+
+    / "fleetcare_logit_calibrator.joblib"
 )
 
 
-# ------------------------------------------------------------
-# Transform validation data
-# ------------------------------------------------------------
+FEATURE_PATH = (
 
-print(
-    "Transforming validation data..."
+    MODEL_DIR
+
+    / "fleetcare_history_feature_columns.joblib"
 )
 
 
-X_val_transformed = (
-    fitted_preprocessor
-    .transform(
-        X_val
-    )
+RAW_FEATURE_PATH = (
+
+    MODEL_DIR
+
+    / "fleetcare_raw_feature_columns.joblib"
 )
 
 
-# ------------------------------------------------------------
-# Feature names
-# ------------------------------------------------------------
+METADATA_PATH = (
 
-feature_names = (
-    fitted_preprocessor
-    .get_feature_names_out()
+    MODEL_DIR
+
+    / "fleetcare_history_model_metadata.json"
 )
 
 
-feature_names = np.array([
-    name
-    .replace(
-        "numeric__",
-        ""
-    )
-    .replace(
-        "categorical__",
-        ""
-    )
-    for name in feature_names
-])
+joblib.dump(
 
+    history_pipeline,
 
-print(
-    "Transformed validation shape:",
-    X_val_transformed.shape
-)
-
-print(
-    "Number of transformed features:",
-    len(
-        feature_names
-    )
+    MODEL_PATH
 )
 
 
-# ============================================================
-# 31. SHAP SAMPLE
-# ============================================================
+joblib.dump(
 
-sample_size = min(
-    SHAP_SAMPLE_SIZE,
-    X_val_transformed.shape[0]
+    calibrator,
+
+    CALIBRATOR_PATH
 )
 
 
-rng = np.random.default_rng(
-    RANDOM_STATE
+joblib.dump(
+
+    list(
+        X_train.columns
+    ),
+
+    FEATURE_PATH
 )
 
 
-sample_indices = rng.choice(
-    X_val_transformed.shape[0],
-    size=sample_size,
-    replace=False
-)
+joblib.dump(
 
+    RAW_FEATURE_COLS,
 
-X_shap = (
-    X_val_transformed[
-        sample_indices
-    ]
-)
-
-
-if hasattr(
-    X_shap,
-    "toarray"
-):
-
-    X_shap = (
-        X_shap
-        .toarray()
-    )
-
-
-print(
-    "SHAP sample shape:",
-    X_shap.shape
+    RAW_FEATURE_PATH
 )
 
 
 # ============================================================
-# 32. SHAP TREE EXPLAINER
+# 28. METADATA
 # ============================================================
 
-print(
-    "Creating TreeExplainer..."
-)
+metadata = {
 
+    "model_name":
+        "FleetCare Vehicle-Aware Multi-History XGBoost",
 
-explainer = shap.TreeExplainer(
-    fitted_model
-)
+    "model_type":
+        "XGBClassifier",
 
+    "feature_representation":
+        "Multi-readout historical features",
 
-print(
-    "Calculating SHAP values..."
-)
+    "sampling":
+        "Vehicle-aware",
 
+    "class_weighting":
+        "None",
 
-shap_values = (
-    explainer(
-        X_shap
-    )
-)
+    "calibration":
+        "5-fold vehicle-level OOF multinomial logit calibration",
 
+    "random_state":
+        RANDOM_STATE,
 
-print(
-    "SHAP values shape:",
-    shap_values.values.shape
-)
+    "num_classes":
+        N_CLASSES,
 
+    "xgboost_parameters": {
 
-# ============================================================
-# 33. CHECK MULTICLASS SHAP
-# ============================================================
+        "n_estimators":
+            150,
 
-if shap_values.values.ndim != 3:
+        "learning_rate":
+            0.08,
 
-    raise ValueError(
-        "Expected SHAP output with shape "
-        "(samples, features, classes). "
-        f"Received {shap_values.values.shape}"
-    )
+        "max_depth":
+            5,
 
+        "min_child_weight":
+            3,
 
-if shap_values.values.shape[2] != 5:
+        "subsample":
+            0.8,
 
-    raise ValueError(
-        "Expected five model classes. "
-        f"Received {shap_values.values.shape}"
-    )
+        "colsample_bytree":
+            0.8,
 
+        "reg_alpha":
+            0.0,
 
-# ============================================================
-# 34. C4 GLOBAL SHAP
-# ============================================================
+        "reg_lambda":
+            1.0,
 
-C4_INDEX = 4
+        "objective":
+            "multi:softprob"
+    },
 
+    "raw_validation_metrics":
+        raw_metrics,
 
-c4_shap_values = (
-    shap_values
-    .values[
-        :,
-        :,
-        C4_INDEX
-    ]
-)
+    "calibrated_validation_metrics":
+        calibrated_metrics,
 
+    "class_definition": {
 
-mean_abs_c4_shap = (
-    np.abs(
-        c4_shap_values
-    )
-    .mean(
-        axis=0
-    )
-)
+        "C0":
+            ">48",
 
+        "C1":
+            "24-48",
 
-c4_global_importance = pd.DataFrame({
+        "C2":
+            "12-24",
 
-    "feature":
-        feature_names,
+        "C3":
+            "6-12",
 
-    "mean_abs_shap_c4":
-        mean_abs_c4_shap
-})
+        "C4":
+            "0-6"
+    },
 
+    "risk_definition": {
 
-c4_global_importance = (
-    c4_global_importance
-    .sort_values(
-        "mean_abs_shap_c4",
-        ascending=False
-    )
-    .reset_index(
-        drop=True
-    )
-)
+        "Risk48":
+            "P(C1)+P(C2)+P(C3)+P(C4)",
 
+        "Risk24":
+            "P(C2)+P(C3)+P(C4)",
 
-print("\n" + "=" * 80)
-print("TOP 20 FEATURES FOR C4")
-print("=" * 80)
+        "Risk12":
+            "P(C3)+P(C4)",
 
-
-print(
-    c4_global_importance
-    .head(20)
-    .to_string(
-        index=False
-    )
-)
-
-
-c4_global_importance.to_csv(
-
-    SHAP_OUTPUT_DIR
-    /
-    "c4_global_feature_importance.csv",
-
-    index=False
-)
-
-
-# ============================================================
-# 35. C4 SHAP BAR PLOT
-# ============================================================
-
-print(
-    "\nCreating C4 SHAP bar plot..."
-)
-
-
-shap.summary_plot(
-    c4_shap_values,
-    X_shap,
-
-    feature_names=
-        feature_names,
-
-    plot_type=
-        "bar",
-
-    max_display=
-        20,
-
-    show=
-        False
-)
-
-
-plt.title(
-    "Top Features Influencing C4 Prediction"
-)
-
-
-plt.tight_layout()
-
-
-plt.savefig(
-
-    SHAP_OUTPUT_DIR
-    /
-    "c4_shap_bar.png",
-
-    dpi=300,
-
-    bbox_inches="tight"
-)
-
-
-plt.close()
-
-
-# ============================================================
-# 36. C4 SHAP BEESWARM
-# ============================================================
-
-print(
-    "Creating C4 SHAP beeswarm..."
-)
-
-
-shap.summary_plot(
-    c4_shap_values,
-    X_shap,
-
-    feature_names=
-        feature_names,
-
-    max_display=
-        20,
-
-    show=
-        False
-)
-
-
-plt.title(
-    "SHAP Distribution for C4 Prediction"
-)
-
-
-plt.tight_layout()
-
-
-plt.savefig(
-
-    SHAP_OUTPUT_DIR
-    /
-    "c4_shap_beeswarm.png",
-
-    dpi=300,
-
-    bbox_inches="tight"
-)
-
-
-plt.close()
-
-
-# ============================================================
-# 37. FIND EXPLANATION CASES
-# ============================================================
-
-actual_classes = (
-    y_val
-    .to_numpy()
-)
-
-
-predicted_classes = (
-    y_pred
-)
-
-
-true_positive_c4 = np.where(
-    (
-        actual_classes
-        ==
-        4
-    )
-    &
-    (
-        predicted_classes
-        ==
-        4
-    )
-)[0]
-
-
-false_positive_c4 = np.where(
-    (
-        actual_classes
-        !=
-        4
-    )
-    &
-    (
-        predicted_classes
-        ==
-        4
-    )
-)[0]
-
-
-false_negative_c4 = np.where(
-    (
-        actual_classes
-        ==
-        4
-    )
-    &
-    (
-        predicted_classes
-        !=
-        4
-    )
-)[0]
-
-
-print("\n" + "=" * 80)
-print("C4 EXPLANATION CASES")
-print("=" * 80)
-
-
-print(
-    "True-positive C4:",
-    len(
-        true_positive_c4
-    )
-)
-
-
-print(
-    "False-positive C4:",
-    len(
-        false_positive_c4
-    )
-)
-
-
-print(
-    "False-negative C4:",
-    len(
-        false_negative_c4
-    )
-)
-
-
-# ============================================================
-# 38. LOCAL VEHICLE EXPLANATION FUNCTION
-# ============================================================
-
-def explain_vehicle(
-    vehicle_index,
-    case_name
-):
-
-    vehicle_id = (
-        val_last
-        .iloc[
-            vehicle_index
-        ][
-            "vehicle_id"
-        ]
-    )
-
-
-    actual_class = int(
-        y_val
-        .iloc[
-            vehicle_index
-        ]
-    )
-
-
-    predicted_class = int(
-        y_pred[
-            vehicle_index
-        ]
-    )
-
-
-    probabilities = (
-        y_proba[
-            vehicle_index
-        ]
-    )
-
-
-    print("\n" + "=" * 80)
-    print(case_name)
-    print("=" * 80)
-
-
-    print(
-        "Vehicle ID:",
-        vehicle_id
-    )
-
-
-    print(
-        "Actual class:",
-        f"C{actual_class}"
-    )
-
-
-    print(
-        "Predicted class:",
-        f"C{predicted_class}"
-    )
-
-
-    print(
-        "Probabilities:"
-    )
-
-
-    for class_index in range(
-        5
-    ):
-
-        print(
-            f"P(C{class_index}) = "
-            f"{probabilities[class_index]:.4f}"
-        )
-
-
-    # --------------------------------------------------------
-    # Transform one vehicle
-    # --------------------------------------------------------
-
-    vehicle_X = (
-        fitted_preprocessor
-        .transform(
-            X_val
-            .iloc[
-                [
-                    vehicle_index
-                ]
-            ]
-        )
-    )
-
-
-    if hasattr(
-        vehicle_X,
-        "toarray"
-    ):
-
-        vehicle_X = (
-            vehicle_X
-            .toarray()
-        )
-
-
-    # --------------------------------------------------------
-    # Calculate local SHAP
-    # --------------------------------------------------------
-
-    vehicle_shap = (
-        explainer(
-            vehicle_X
-        )
-    )
-
-
-    vehicle_c4_shap = (
-        vehicle_shap
-        .values[
-            0,
-            :,
-            C4_INDEX
-        ]
-    )
-
-
-    vehicle_feature_values = (
-        vehicle_X[
-            0
-        ]
-    )
-
-
-    # --------------------------------------------------------
-    # Build explanation table
-    # --------------------------------------------------------
-
-    local_df = pd.DataFrame({
-
-        "feature":
-            feature_names,
-
-        "feature_value":
-            vehicle_feature_values,
-
-        "shap_c4":
-            vehicle_c4_shap,
-
-        "abs_shap":
-            np.abs(
-                vehicle_c4_shap
-            )
-    })
-
-
-    local_df = (
-        local_df
-        .sort_values(
-            "abs_shap",
-            ascending=False
-        )
-        .reset_index(
-            drop=True
-        )
-    )
-
-
-    print(
-        "\nTop 10 factors affecting C4:"
-    )
-
-
-    print(
-        local_df[
-            [
-                "feature",
-                "feature_value",
-                "shap_c4"
-            ]
-        ]
-        .head(10)
-        .to_string(
-            index=False
-        )
-    )
-
-
-    safe_name = (
-        case_name
-        .lower()
-        .replace(
-            " ",
-            "_"
-        )
-    )
-
-
-    local_df.to_csv(
-
-        SHAP_OUTPUT_DIR
-        /
-        (
-            f"{safe_name}"
-            f"_vehicle_{vehicle_id}.csv"
-        ),
-
-        index=False
-    )
-
-
-    return {
-
-        "case":
-            case_name,
-
-        "vehicle_id":
-            vehicle_id,
-
-        "actual_class":
-            actual_class,
-
-        "predicted_class":
-            predicted_class,
-
-        "P_C0":
-            probabilities[0],
-
-        "P_C1":
-            probabilities[1],
-
-        "P_C2":
-            probabilities[2],
-
-        "P_C3":
-            probabilities[3],
-
-        "P_C4":
-            probabilities[4],
-
-        "top_feature_1":
-            local_df.iloc[
-                0
-            ][
-                "feature"
-            ],
-
-        "top_feature_1_shap":
-            local_df.iloc[
-                0
-            ][
-                "shap_c4"
-            ],
-
-        "top_feature_2":
-            local_df.iloc[
-                1
-            ][
-                "feature"
-            ],
-
-        "top_feature_2_shap":
-            local_df.iloc[
-                1
-            ][
-                "shap_c4"
-            ],
-
-        "top_feature_3":
-            local_df.iloc[
-                2
-            ][
-                "feature"
-            ],
-
-        "top_feature_3_shap":
-            local_df.iloc[
-                2
-            ][
-                "shap_c4"
-            ]
+        "Risk6":
+            "P(C4)"
     }
+}
 
 
-# ============================================================
-# 39. EXPLAIN REPRESENTATIVE CASES
-# ============================================================
+with open(
 
-case_summaries = []
+    METADATA_PATH,
 
+    "w",
 
-# ------------------------------------------------------------
-# True Positive
-# ------------------------------------------------------------
+    encoding="utf-8"
 
-if len(
-    true_positive_c4
-) > 0:
+) as f:
 
-    tp_index = (
-        true_positive_c4[
-            np.argmax(
-                y_proba[
-                    true_positive_c4,
-                    4
-                ]
-            )
-        ]
-    )
+    json.dump(
 
+        metadata,
 
-    case_summaries.append(
+        f,
 
-        explain_vehicle(
-            tp_index,
-            "True Positive C4"
-        )
-
-    )
-
-
-# ------------------------------------------------------------
-# False Positive
-# ------------------------------------------------------------
-
-if len(
-    false_positive_c4
-) > 0:
-
-    fp_index = (
-        false_positive_c4[
-            np.argmax(
-                y_proba[
-                    false_positive_c4,
-                    4
-                ]
-            )
-        ]
-    )
-
-
-    case_summaries.append(
-
-        explain_vehicle(
-            fp_index,
-            "False Positive C4"
-        )
-
-    )
-
-
-# ------------------------------------------------------------
-# False Negative
-# ------------------------------------------------------------
-
-if len(
-    false_negative_c4
-) > 0:
-
-    fn_index = (
-        false_negative_c4[
-            np.argmax(
-                y_proba[
-                    false_negative_c4,
-                    4
-                ]
-            )
-        ]
-    )
-
-
-    case_summaries.append(
-
-        explain_vehicle(
-            fn_index,
-            "False Negative C4"
-        )
-
+        indent=2
     )
 
 
 # ============================================================
-# 40. SAVE CASE SUMMARY
+# 29. VERIFY SAVED MODEL + CALIBRATOR
 # ============================================================
-
-case_summary_df = pd.DataFrame(
-    case_summaries
-)
-
-
-case_summary_df.to_csv(
-
-    SHAP_OUTPUT_DIR
-    /
-    "c4_explanation_cases.csv",
-
-    index=False
-)
-
 
 print("\n" + "=" * 80)
-print("C4 SHAP CASE SUMMARY")
+print("VERIFYING SAVED MODEL")
+print("=" * 80)
+
+
+loaded_model = joblib.load(
+    MODEL_PATH
+)
+
+
+loaded_calibrator = joblib.load(
+    CALIBRATOR_PATH
+)
+
+
+loaded_features = joblib.load(
+    FEATURE_PATH
+)
+
+
+X_verify = (
+
+    X_val
+
+    .iloc[:20]
+
+    .reindex(
+        columns=loaded_features
+    )
+)
+
+
+verify_raw = (
+
+    loaded_model
+
+    .predict_proba(
+        X_verify
+    )
+)
+
+
+verify_calibrated = (
+
+    calibrated_proba(
+
+        loaded_calibrator,
+
+        verify_raw
+    )
+)
+
+
+original_calibrated = (
+
+    calibrated_y_proba[
+        :20
+    ]
+)
+
+
+assert np.allclose(
+
+    verify_calibrated,
+
+    original_calibrated,
+
+    atol=1e-10
+)
+
+
+assert np.allclose(
+
+    verify_calibrated.sum(
+        axis=1
+    ),
+
+    1.0
+)
+
+
+print(
+    "✓ Saved model + calibrator verification PASSED."
+)
+
+
+# ============================================================
+# 30. FINAL SUMMARY
+# ============================================================
+
+print("\n" + "=" * 80)
+print("FINAL MODEL SAVED")
 print("=" * 80)
 
 
 print(
-    case_summary_df
+    "\nModel:",
+    MODEL_PATH
+)
+
+
+print(
+    "Calibrator:",
+    CALIBRATOR_PATH
+)
+
+
+print(
+    "Feature columns:",
+    FEATURE_PATH
+)
+
+
+print(
+    "Raw feature columns:",
+    RAW_FEATURE_PATH
+)
+
+
+print(
+    "Metadata:",
+    METADATA_PATH
+)
+
+
+print(
+    "\nRaw Macro-F1:",
+    round(
+        raw_metrics[
+            "macro_f1"
+        ],
+        4
+    )
+)
+
+
+print(
+    "Calibrated Macro-F1:",
+    round(
+        calibrated_metrics[
+            "macro_f1"
+        ],
+        4
+    )
+)
+
+
+print(
+    "Raw Log Loss:",
+    round(
+        raw_metrics[
+            "log_loss"
+        ],
+        4
+    )
+)
+
+
+print(
+    "Calibrated Log Loss:",
+    round(
+        calibrated_metrics[
+            "log_loss"
+        ],
+        4
+    )
+)
+
+
+print("\nRaw Risk Metrics:")
+
+print(
+
+    raw_risk_metrics
+
     .round(4)
+
     .to_string(
         index=False
     )
 )
 
 
-# ============================================================
-# 41. SIGNED GLOBAL SHAP
-# ============================================================
-
-mean_signed_c4_shap = (
-    c4_shap_values
-    .mean(
-        axis=0
-    )
-)
-
-
-signed_importance = pd.DataFrame({
-
-    "feature":
-        feature_names,
-
-    "mean_shap_c4":
-        mean_signed_c4_shap,
-
-    "mean_abs_shap_c4":
-        mean_abs_c4_shap
-})
-
-
-signed_importance.to_csv(
-
-    SHAP_OUTPUT_DIR
-    /
-    "c4_signed_shap_importance.csv",
-
-    index=False
-)
-
-
-top_positive = (
-    signed_importance
-    .sort_values(
-        "mean_shap_c4",
-        ascending=False
-    )
-    .head(15)
-)
-
-
-top_negative = (
-    signed_importance
-    .sort_values(
-        "mean_shap_c4",
-        ascending=True
-    )
-    .head(15)
-)
-
-
-print("\n" + "=" * 80)
-print("TOP FEATURES PUSHING TOWARD C4")
-print("=" * 80)
-
+print("\nCalibrated Risk Metrics:")
 
 print(
-    top_positive
-    .round(6)
+
+    calibrated_risk_metrics
+
+    .round(4)
+
     .to_string(
         index=False
     )
@@ -2783,116 +2985,5 @@ print(
 
 
 print("\n" + "=" * 80)
-print("TOP FEATURES PUSHING AWAY FROM C4")
+print("FLEETCARE FINAL PIPELINE COMPLETE")
 print("=" * 80)
-
-
-print(
-    top_negative
-    .round(6)
-    .to_string(
-        index=False
-    )
-)
-
-
-# ============================================================
-# 42. FINISH
-# ============================================================
-
-print("\n" + "=" * 80)
-print("FLEETCARE MODEL + SHAP COMPLETE")
-print("=" * 80)
-
-
-print(
-    "\nModel:"
-)
-
-print(
-    "Vehicle-aware + Multi-readout History "
-    "+ XGBoost + No Weight"
-)
-
-
-print(
-    "\nValidation:"
-)
-
-print(
-    "Accuracy:",
-    round(
-        accuracy,
-        4
-    )
-)
-
-print(
-    "Macro F1:",
-    round(
-        macro_f1,
-        4
-    )
-)
-
-print(
-    "C4 Precision:",
-    round(
-        c4_precision,
-        4
-    )
-)
-
-print(
-    "C4 Recall:",
-    round(
-        c4_recall,
-        4
-    )
-)
-
-print(
-    "C4 F1:",
-    round(
-        c4_f1,
-        4
-    )
-)
-
-
-print(
-    "\nSHAP outputs:"
-)
-
-print(
-    SHAP_OUTPUT_DIR
-)
-
-
-print(
-    "\nGenerated:"
-)
-
-print(
-    "- c4_global_feature_importance.csv"
-)
-
-print(
-    "- c4_signed_shap_importance.csv"
-)
-
-print(
-    "- c4_explanation_cases.csv"
-)
-
-print(
-    "- c4_shap_bar.png"
-)
-
-print(
-    "- c4_shap_beeswarm.png"
-)
-
-print(
-    "- local explanation CSVs"
-)
