@@ -1,0 +1,149 @@
+[
+  {
+    "vehicle_id": 12345,
+
+    "prediction": {
+      "class_id": 4,
+      "state": "C4",
+      "description": "Repair proximity: 0-6 operational units",
+
+      "confidence_score": 0.4312,
+
+      "class_scores": {
+        "C0": 0.1021,
+        "C1": 0.0812,
+        "C2": 0.1375,
+        "C3": 0.2480,
+        "C4": 0.4312
+      }
+    },
+
+    "risk": {
+      "Risk48": {
+        "score": 0.8979,
+        "fleet_percentile": 98.7
+      },
+
+      "Risk24": {
+        "score": 0.7958,
+        "fleet_percentile": 98.1
+      },
+
+      "Risk12": {
+        "score": 0.6792,
+        "fleet_percentile": 97.6
+      },
+
+      "Risk6": {
+        "score": 0.4312,
+        "fleet_percentile": 96.8
+      }
+    },
+
+    "history": {
+      "readout_count": 31,
+      "quality": "STRONG",
+
+      "recent_states": [
+        "C1",
+        "C2",
+        "C3",
+        "C4",
+        "C4"
+      ],
+
+      "class_stability": 0.6,
+      "class_worsening": true,
+
+      "risk_persistence": {
+        "Risk48": 1.0,
+        "Risk12": 0.8,
+        "Risk6": 0.6
+      },
+
+      "deterioration": {
+        "Risk48": {
+          "fleet_percentile": 91.2,
+          "fast": true
+        },
+
+        "Risk12": {
+          "fleet_percentile": 95.6,
+          "fast": true
+        },
+
+        "Risk6": {
+          "fleet_percentile": 97.4,
+          "fast": true
+        }
+      },
+
+      "trajectory": [
+        {
+          "time_step": 101,
+          "state": "C0",
+          "Risk48": 0.29,
+          "Risk24": 0.17,
+          "Risk12": 0.08,
+          "Risk6": 0.02
+        },
+
+        {
+          "time_step": 119,
+          "state": "C1",
+          "Risk48": 0.56,
+          "Risk24": 0.31,
+          "Risk12": 0.15,
+          "Risk6": 0.05
+        },
+
+        {
+          "time_step": 141,
+          "state": "C2",
+          "Risk48": 0.67,
+          "Risk24": 0.45,
+          "Risk12": 0.24,
+          "Risk6": 0.11
+        },
+
+        {
+          "time_step": 164,
+          "state": "C4",
+          "Risk48": 0.81,
+          "Risk24": 0.68,
+          "Risk12": 0.49,
+          "Risk6": 0.31
+        },
+
+        {
+          "time_step": 187,
+          "state": "C4",
+          "Risk48": 0.8979,
+          "Risk24": 0.7958,
+          "Risk12": 0.6792,
+          "Risk6": 0.4312
+        }
+      ]
+    },
+
+    "recommendation": {
+      "priority": "CRITICAL",
+      "action": "PRIORITY_INSPECT",
+      "rule_id": "TR1",
+
+      "reason": "The vehicle is currently classified as C4 and is within the highest 5% of fleet Risk6 scores. The urgent signal is supported by persistent near-term risk or unusually rapid deterioration.",
+
+      "evidence": [
+        "Current model state is C4",
+        "Risk6 is in the top 5% of the fleet",
+        "Risk6 remained high in at least 3 of the last 5 observations",
+        "Risk6 deterioration is within the fastest 10% of the fleet"
+      ]
+    },
+
+    "explanation": {
+      "shap_available": false,
+      "top_features": []
+    }
+  }
+]
