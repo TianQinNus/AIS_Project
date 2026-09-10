@@ -1,0 +1,47 @@
+{
+  "total_vehicles": 5046,
+
+  "maintenance_actions": {
+    "PRIORITY_INSPECT": 175,
+    "INSPECT": 163,
+    "ENHANCED_MONITOR": 620,
+    "MONITOR": 185,
+    "CONTINUE": 3903
+  },
+
+  "maintenance_priorities": {
+    "CRITICAL": 175,
+    "HIGH": 163,
+    "MEDIUM": 620,
+    "LOW": 185,
+    "NORMAL": 3903
+  },
+
+  "predicted_states": {
+    "C0": 4051,
+    "C1": 108,
+    "C2": 555,
+    "C3": 72,
+    "C4": 260
+  },
+
+  "temporal_summary": {
+    "history_quality": {
+      "STRONG": 4968,
+      "MODERATE": 69,
+      "LIMITED": 9
+    },
+
+    "fast_deterioration": {
+      "Risk48": 505,
+      "Risk12": 505,
+      "Risk6": 505
+    },
+
+    "persistent_risk": {
+      "Risk48": 1730,
+      "Risk12": 901,
+      "Risk6": 365
+    }
+  }
+}
