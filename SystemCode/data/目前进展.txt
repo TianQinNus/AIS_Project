@@ -1,307 +1,320 @@
-FleetCare AI — Model Test Summary（简洁版）
+① Baseline
+Random Forest / Temporal XGBoost
+        ↓
+发现 severe imbalance + repeated vehicle observations
 
-说明：
-- Teammate 的实验使用原编号。
-- 个人实验为避免混淆，统一使用 c 后缀。
-- 当前个人实验已完成至 Test 10c。
-- Test 11c 已准备，尚未运行。
+② Vehicle-Aware Temporal XGBoost
+        ↓
+控制 vehicle contribution
 
+③ Multi-History XGBoost
+        ↓
+加入 longitudinal information
 
-======================================================================
-Test 00 — Data Exploration + Random Forest Baseline
-======================================================================
+④ Robust Model Development
+Vehicle-level split
++ calibration experiments
++ multi-seed evaluation
++ feature/parameter search
+        ↓
+确定最终 predictive model
 
-目的：
-了解数据结构、类别分布、缺失情况和基础建模难点。
+⑤ Hybrid Reasoning System
+ML Risk Scores
+        +
+Historical Persistence
+Relative Deterioration
+Fleet-relative Risk
+        ↓
+Rule Engine
+        ↓
+Maintenance Prioritization
 
-在做什么：
-完成数据探索、censoring-aware label 构造，并建立 Random Forest baseline。
 
-结论：
-数据存在非常严重的类别不平衡，Accuracy 不能作为主要评价指标；后续需要重点关注 minority-class detection 和 vehicle-level bias。
 
 
-======================================================================
-Test 01 — Temporal XGBoost
-======================================================================
+## Evaluation
 
-目的：
-验证历史变化信息是否比只看当前 readout 更有价值。
+FleetCare AI was evaluated at three levels: **multiclass predictive performance, maintenance-risk ranking, and hybrid reasoning effectiveness**. Because the validation dataset is highly imbalanced, with 4,910 of 5,046 vehicles belonging to C0, overall classification accuracy alone is not an appropriate measure of system performance. The evaluation therefore places greater emphasis on minority-class performance, risk ranking, and the ability to identify critical vehicles under constrained inspection capacity.
 
-在做什么：
-加入 Previous、Delta、Rate 等 one-step temporal features，并使用 XGBoost。
+### 1. Multiclass Predictive Performance
 
-结论：
-Temporal information 有预测价值，但仅依赖 one-step history 仍不足以有效识别高风险少数类别。
+The final XGBoost model predicts five repair-proximity classes ranging from C0, representing no predicted repair within 48 operational units, to C4, representing repair proximity within 0–6 operational units.
 
+| Class | Precision | Recall | F1-score | Support |
+|---|---:|---:|---:|---:|
+| C0 | 0.9780 | 0.8069 | 0.8843 | 4,910 |
+| C1 | 0.0000 | 0.0000 | 0.0000 | 16 |
+| C2 | 0.0054 | 0.2143 | 0.0105 | 14 |
+| C3 | 0.0139 | 0.0333 | 0.0196 | 30 |
+| C4 | 0.0654 | 0.2237 | 0.1012 | 76 |
 
-======================================================================
-Test 02 — Vehicle-Aware Sampling
-======================================================================
+The model achieved an overall accuracy of **78.93%**, a macro F1-score of **0.2031**, and a weighted F1-score of **0.8621**.
 
-目的：
-减少同一 vehicle 大量重复 observations 对训练造成的偏差。
+However, these results must be interpreted in the context of severe class imbalance. Approximately 97.3% of validation vehicles belong to C0, while C1–C4 collectively account for only 136 vehicles. Consequently, overall accuracy and weighted F1 are dominated by C0 performance and do not adequately represent the system's ability to detect rare maintenance events.
 
-在做什么：
-Repair vehicle 每个 class window 最多取一条 observation；Non-repair vehicle 最多取一条 safe C0。
+The low performance for C1–C3 also indicates that exact five-class repair-proximity classification remains difficult. Therefore, FleetCare does not rely solely on the hard predicted class for maintenance decisions. Instead, the class probability outputs are also transformed into cumulative maintenance-risk scores and used as ranking signals.
 
-结论：
-Vehicle-Aware Sampling 明显改善 high-risk detection，是后续模型的重要基础组件。
+### 2. Maintenance-Risk Ranking
 
+Four cumulative risk horizons were evaluated:
 
-======================================================================
-Test 03 — Vehicle-Aware + No Weight
-======================================================================
+- **Risk48:** repair within 48 operational units
+- **Risk24:** repair within 24 operational units
+- **Risk12:** repair within 12 operational units
+- **Risk6:** repair within 6 operational units
 
-目的：
-单独评估 Vehicle-Aware Sampling 的效果，分离 class weighting 的影响。
+The raw XGBoost outputs are treated as **model risk scores rather than calibrated real-world repair probabilities**, since calibration experiments did not improve the final model performance.
 
-在做什么：
-保留 temporal features 和 vehicle-aware sampling，但不使用 class weights。
+| Risk Horizon | Average Precision | ROC-AUC | Top-5% Recall | Top-10% Recall |
+|---|---:|---:|---:|---:|
+| Risk48 | 0.0518 | 0.6929 | 0.0882 | 0.1765 |
+| Risk24 | 0.0467 | 0.6665 | 0.1083 | 0.1667 |
+| Risk12 | 0.0444 | 0.6708 | 0.1321 | 0.2264 |
+| Risk6 | 0.0443 | **0.7111** | **0.1974** | **0.2763** |
 
-结论：
-No-weight 模型整体更加平衡，说明 class weighting 并不是越强越好。
+Risk6 achieved the strongest ROC-AUC of **0.7111**, indicating that although exact multiclass classification is challenging, the model retains useful discriminatory information for identifying vehicles approaching critical repair conditions.
 
+When vehicles were ranked solely by Risk6, inspecting the highest-risk 5% of the fleet identified **19.74% of all C4 vehicles**, while inspecting the highest-risk 10% identified **27.63%**.
 
-======================================================================
-Test 04 — Class Weight Ablation
-======================================================================
+This supports the use of the predictive model as a **maintenance-risk ranking mechanism**, rather than relying exclusively on its hard C0–C4 classification.
 
-目的：
-寻找 minority sensitivity 与 false alerts 之间更合理的平衡。
+### 3. Temporal Rule Engine Evaluation
 
-在做什么：
-比较 No Weight、Light、Moderate、Stronger、Risk-Focused 等 weighting strategy。
+The predictive model was subsequently combined with a temporal reasoning layer. The rule engine considers multiple sources of evidence, including current model state, fleet-relative risk, historical risk persistence, relative deterioration, class trajectory, prediction stability, and history sufficiency.
 
-结论：
-增加 minority weight 可以提高 C4 Recall，但同时显著增加 false positives；模型不能只按 Recall 选择。
+The resulting maintenance actions were evaluated against the true repair outcomes.
 
+| Intervention | Fleet Selected | C4 Recall | C4 Precision | Risk48 Recall |
+|---|---:|---:|---:|---:|
+| Priority Inspect | 3.47% | 17.11% | 7.43% | 10.29% |
+| Inspect or Higher | 6.70% | 27.63% | 6.21% | 17.65% |
+| Enhanced Monitor or Higher | 18.99% | 34.21% | 2.71% | 30.15% |
 
-======================================================================
-Teammate Test — Multi-Readout Historical Features
-======================================================================
+The **Inspect or Higher** policy selected only 6.7% of the fleet while identifying 27.63% of all C4 vehicles. This demonstrates that the temporal reasoning layer can concentrate critical vehicles into a relatively small inspection group.
 
-目的：
-判断更长历史 pattern 是否优于只看最近一次变化。
+The rule engine is not intended to replace the predictive model or act as a second classifier. Instead, its purpose is to translate predictive and longitudinal evidence into transparent maintenance actions such as `PRIORITY_INSPECT`, `INSPECT`, `ENHANCED_MONITOR`, `MONITOR`, and `CONTINUE`.
 
-在做什么：
-在 Current / Previous / Delta / Rate 基础上，加入 change3、change5、mean3、std3、mean5、std5 等 multi-readout features。
+### 4. Baseline vs Hybrid Reasoning
 
-结论：
-Multi-History + No Weight 是目前综合表现最平衡的 base candidate，说明更丰富的历史表示比继续增加 class weight 更有价值。
+To determine whether temporal reasoning provides additional value beyond the predictive model, the final hybrid ranking was compared against a baseline in which vehicles were ranked solely according to the XGBoost Risk6 score.
 
+Both methods were evaluated using exactly the same inspection capacities.
 
-======================================================================
-Teammate Test — SHAP Explainability
-======================================================================
+| Inspection Capacity | Baseline C4 Recall | Hybrid C4 Recall | Baseline C4 Precision | Hybrid C4 Precision |
+|---:|---:|---:|---:|---:|
+| 2.5% | 9.21% | **13.16%** | 5.51% | **7.87%** |
+| 5.0% | 19.74% | **21.05%** | 5.93% | **6.32%** |
+| 7.5% | **26.32%** | 25.00% | **5.28%** | 5.01% |
+| 10.0% | 27.63% | **28.95%** | 4.16% | **4.36%** |
+| 15.0% | 38.16% | 38.16% | 3.83% | 3.83% |
+| 20.0% | **47.37%** | 46.05% | **3.56%** | 3.47% |
 
-目的：
-解释模型为什么产生高风险预测。
+The results show that the hybrid reasoning system does **not uniformly outperform** the raw ML ranking across all inspection capacities. Instead, its primary benefit appears under constrained inspection capacity.
 
-在做什么：
-对当前 Multi-History + No Weight 模型进行 Global SHAP 和 Local SHAP。
+At the most selective 2.5% inspection level, the baseline identified 7 C4 vehicles, whereas the hybrid system identified 10. C4 recall therefore increased from **9.21% to 13.16%**, while precision increased from **5.51% to 7.87%**.
 
-结论：
-模型确实大量利用 historical trend、rate、rolling mean/std 等特征；同时部分 C0 vehicle 也表现出类似 C4 的历史 pattern，这解释了 false positives。
+At 5% capacity, C4 recall increased from **19.74% to 21.05%**, and at 10% capacity it increased from **27.63% to 28.95%**.
 
+At broader inspection capacities, the two approaches performed similarly, with the baseline slightly outperforming the hybrid ranking at 7.5% and 20%.
 
-======================================================================
-Teammate Test — Binary Diagnostic
-======================================================================
+These findings suggest that temporal reasoning provides its greatest value as a **high-priority triage mechanism**, helping distinguish the most urgent vehicles when maintenance resources are limited, rather than universally replacing the underlying ML risk ranking.
 
-目的：
-初步探索 C0 vs C1-C4 的 binary risk classification。
+### 5. Lift Under Limited Inspection Capacity
 
-在做什么：
-将 C0 设为 negative、C1-C4 设为 positive，并测试 binary model 与不同 thresholds。
+The validation fleet contains 76 C4 vehicles among 5,046 vehicles, corresponding to a C4 prevalence of approximately **1.51%**.
 
-结论：
-Binary diagnostic 已经实现，但目前没有完整结果，因此暂时不能作为正式模型选择依据。
+At 2.5% inspection capacity, the hybrid system achieved a C4 precision of **7.87%**. This corresponds to approximately:
 
+**Lift@2.5% = 7.87% / 1.51% ≈ 5.2×**
 
-======================================================================
-Test 05c — Raw Probability + Minimum Expected Cost
-======================================================================
+Therefore, a vehicle selected within the highest-priority 2.5% by the hybrid system was approximately **5.2 times as likely to be a C4 vehicle as a randomly selected vehicle**.
 
-目的：
-测试模型 raw probability 能否直接结合 business cost matrix 生成 maintenance decision。
+This provides an operationally interpretable measure of the system's ability to concentrate critical maintenance cases into a limited inspection budget.
 
-在做什么：
-比较普通 Argmax 和 Minimum Expected Cost decision。
+### 6. Overall Evaluation
 
-结论：
-Raw probability 直接进入 MEC 会产生极端 high-risk predictions，说明 raw predict_proba 不能直接解释为真实业务概率。
+The evaluation highlights an important distinction between **classification performance and maintenance decision support**.
 
+Exact multiclass prediction remains challenging because repair-proximity classes are extremely imbalanced, particularly C1–C3. As a result, overall accuracy is not used as the primary indicator of system effectiveness.
 
-======================================================================
-Test 06c — Probability Calibration
-======================================================================
+Instead, the predictive model provides useful risk-ranking signals, particularly for near-term Risk6, while the temporal reasoning layer incorporates historical persistence, deterioration and fleet-relative evidence to convert those signals into interpretable maintenance actions.
 
-目的：
-修正 raw probability distortion。
+The final evaluation indicates that the hybrid system is particularly useful when inspection capacity is highly constrained. At 2.5% fleet capacity, temporal reasoning increased C4 recall from 9.21% to 13.16% and increased precision from 5.51% to 7.87%. At broader capacities, performance was broadly comparable to the raw ML ranking.
 
-在做什么：
-比较 Raw、Prior Correction 和 Logit Calibration。
+Overall, the results support FleetCare AI primarily as a **maintenance prioritization and decision-support system rather than a standalone high-accuracy multiclass classifier**. The predictive model identifies risk, while the temporal reasoning layer adds longitudinal context, explainability, and actionable maintenance prioritization.
 
-结论：
-Calibration 明显必要；但当前实验中 calibration fitting 和 evaluation 没有完全分开，因此需要更严格 protocol。
 
+| Rule | 核心条件 | Action |
+|---|---|---|
+| **TR1** | C4 + Risk6 极高 + temporal confirmation | **PRIORITY_INSPECT** |
+| **TR2** | C3/C4 或 near-term risk 较高，并有 persistence / deterioration 支持 | **INSPECT** |
+| **TR3** | 高风险信号存在，但证据不足或不稳定 | **MANUAL_REVIEW** |
+| **TR4** | 中等风险 / deterioration，需要加强观察 | **ENHANCED_MONITOR** |
+| **TR5** | 有 warning evidence，但不足以升级 | **MONITOR** |
+| **TR6** | 没有足够 escalation evidence | **CONTINUE** |
 
-======================================================================
-Test 07c — Three-Way Calibration + Multi-Seed
-======================================================================
-
-目的：
-解决 calibration evaluation leakage，并验证 calibration method 是否稳定。
-
-在做什么：
-将数据拆成 Base Train、Calibration、Selection Dev，并使用多个 random seeds 比较 calibration 方法。
-
-结论：
-Logit Calibration 在多个 seeds 下稳定表现最好，因此成为当前主要 calibration candidate。
-
-
-======================================================================
-Test 08c — Cumulative Risk + Capacity-Constrained Ranking
-======================================================================
-
-目的：
-避免 Argmax 几乎全部 C0，以及 MEC 产生过量 high-risk alerts。
-
-在做什么：
-构造 Risk48 / Risk24 / Risk12 / Risk6，并按 Top-K inspection capacity 对 fleet 排序。
-
-结论：
-Capacity-Constrained Ranking 比直接分类更符合实际 maintenance scenario，但暴露出明显的 internal-to-external ranking gap。
-
-
-======================================================================
-Test 09c — Rebase 到 Teammate 最新 Base
-======================================================================
-
-目的：
-确认 Test 08c 的 external gap 是否只是因为使用了旧 one-step + weighted base。
-
-在做什么：
-将 calibration、cumulative risk 和 capacity ranking 重新建立在 Multi-History + No Weight base 上。
-
-结论：
-最新 base 确实带来一定 external ranking 改善，而且 Logit Calibration 仍然稳定；但 generalization gap 仍未解决。
-
-
-======================================================================
-Test 10c — Direct Horizon-Specific Binary Models
-======================================================================
-
-目的：
-测试是否应该放弃 five-class-derived risk，直接训练 repair-within-H binary model。
-
-在做什么：
-分别训练 Risk48、Risk24、Risk12、Risk6 binary models，并使用 horizon-specific censoring 增加安全训练数据。
-
-结论：
-虽然获得了更多安全训练样本，binary probability calibration 也更好，但 direct binary ranking 并没有稳定优于当前 multiclass-derived risk，因此暂时不替换现有架构。
-
-
-======================================================================
-当前最终结果
-======================================================================
-
-当前最合理的模型主线：
-
-Vehicle-Aware Sampling
-+
-Multi-Readout Historical Features
-+
-Multiclass XGBoost
-+
-No Additional Class Weighting
-+
-Logit Calibration
-+
-Risk48 / Risk24 / Risk12 / Risk6
-+
-Capacity-Constrained Ranking
-+
-SHAP Explainability
-
-
-目前已经比较明确：
-
-1. Vehicle-Aware Sampling 需要保留。
-2. Multi-Readout Historical Features 优于仅 one-step history。
-3. No Weight 比较适合作为当前 base candidate。
-4. Raw probability 不能直接进入 business decision。
-5. Logit Calibration 是目前最稳定的 calibration candidate。
-6. Capacity-Constrained Ranking 比 Argmax / MEC 更适合最终业务场景。
-7. Direct Binary Horizon Models 暂时没有足够证据替换 Multiclass Derived Risk。
-
-
-======================================================================
-当前主要问题
-======================================================================
-
-当前最大的技术问题：
-
-External Generalization Gap。
-
-也就是：
-
-模型在 internal Policy Dev 上 ranking 较好，
-但到 Official Validation 后明显下降。
-
-
-目前还没有确定：
-
-- 最终主 Risk Horizon
-- 最终 Top-K inspection capacity
-- external gap 的主要来源
-
-
-======================================================================
-Test 11c — Feature Robustness / Generalization Ablation（待运行）
-======================================================================
-
-目的：
-研究 external generalization gap 是否来自 feature representation，尤其是 absolute time_step dependency。
-
-在做什么：
-比较：
-
-1. Full Multi-History
-2. Full Multi-History without time_step
-3. One-Step
-4. One-Step without time_step
-
-并保持其他训练、calibration 和 ranking protocol 不变。
-
-结论目标：
-判断：
-- Multi-History 是否在严格相同 protocol 下仍然最好；
-- time_step 是否是真实稳定 signal，还是 study-position proxy；
-- 删除 time_step 是否能缩小 internal-to-external generalization gap。
-
-
-======================================================================
-后续测试思路
-======================================================================
-
-优先运行 Test 11c。
-
-根据结果：
-
-A. 如果 Full Multi-History 仍然内部和外部最好：
-   保留当前 feature set，进入最终 robustness、policy 和 reasoning integration。
-
-B. 如果 No-TimeStep variant 几乎不损失 internal performance，
-   但 external 更稳定：
-   进一步降低模型对 absolute time_step 的依赖。
-
-C. 如果所有 feature variants 都存在类似 external gap：
-   下一步转向：
-   - Cutoff-Aware Development Protocol
-   - Grouped Cross-Validation
-   - Distribution-Robust Evaluation
-
-最终目标不是单纯提高分类指标，
-而是得到一个在 unseen fleet 上稳定、可解释、alert burden 可控的 maintenance risk-ranking system。
+| Capacity | ML C4 Recall | Hybrid C4 Recall | Δ |
+|---:|---:|---:|---:|
+| 2.5% | 9.21% | **13.16%** | **+3.95pp** |
+| 5% | 19.74% | **21.05%** | +1.32pp |
+| 7.5% | **26.32%** | 25.00% | −1.32pp |
+| 10% | 27.63% | **28.95%** | +1.32pp |
+| 15% | 38.16% | 38.16% | 0 |
+| 20% | **47.37%** | 46.05% | −1.32pp |
+
+
+ML Model Evaluation
+│
+├─ Multiclass
+│   Macro-F1 = 0.2031
+│
+├─ Risk Ranking
+│   Risk6 AUC = 0.7111
+│   Top-K Recall
+│
+├─ Imbalance Ablation
+│   Current vs ROS vs SMOTE
+│   → Current retained
+│
+├─ Rule Engine Evaluation
+│   Priority Inspect / Inspect+ / Monitor+
+│
+├─ Hybrid vs ML
+│   → improvement at constrained capacity
+│
+└─ Reasoning Ablation
+    ├─ Persistence             ❌ standalone
+    ├─ Deterioration           ✅
+    ├─ Both                    mixed
+    └─ Full Hybrid             ✅ low capacity
+
+
+
+| Method | C4 Recall Gain @2.5% | @5% | @10% |
+|---|---:|---:|---:|
+| + Persistence | −3.95pp | −3.95pp | 0 |
+| **+ Deterioration** | **+2.63pp** | **+1.32pp** | **+3.95pp** |
+| + Persistence & Deterioration | −1.32pp | −1.32pp | **+3.95pp** |
+| **Full Hybrid** | **+3.95pp** | **+1.32pp** | **+1.32pp** |    
+
+
+
+================================================================================
+FINAL CLASSIFICATION REPORT
+================================================================================
+              precision    recall  f1-score   support
+
+          C0     0.9780    0.8069    0.8843      4910
+          C1     0.0000    0.0000    0.0000        16
+          C2     0.0054    0.2143    0.0105        14
+          C3     0.0139    0.0333    0.0196        30
+          C4     0.0654    0.2237    0.1012        76
+
+    accuracy                         0.7893      5046
+   macro avg     0.2125    0.2556    0.2031      5046
+weighted avg     0.9528    0.7893    0.8621      5046
+
+Accuracy: 0.7893
+Macro Precision: 0.2125
+Macro Recall: 0.2556
+Macro F1: 0.2031
+Weighted F1: 0.8621
+
+[12/15] Creating confusion matrices...
+
+[13/15] Evaluating risk ranking...
+
+================================================================================
+BASELINE RISK6 CAPACITY EVALUATION
+================================================================================
+ Risk6Threshold  VehiclesSelected  FleetPercent  C4Found  C4Recall  C4Precision
+           80.0              1010        0.2002       36    0.4737       0.0356
+           85.0               757        0.1500       29    0.3816       0.0383
+           90.0               505        0.1001       21    0.2763       0.0416
+           92.5               379        0.0751       20    0.2632       0.0528
+           95.0               253        0.0501       15    0.1974       0.0593
+Horizon  AveragePrecision  ROCAUC  Top5Recall  Top5Precision  Top10Recall  Top10Precision
+ Risk48            0.0518  0.6929      0.0882         0.0474       0.1765          0.0475
+ Risk24            0.0467  0.6665      0.1083         0.0514       0.1667          0.0396
+ Risk12            0.0444  0.6708      0.1321         0.0553       0.2264          0.0475
+  Risk6            0.0443  0.7111      0.1974         0.0593       0.2763          0.0416
+
+[14/15] Evaluating temporal reasoning engine...
+
+================================================================================
+RULE ENGINE EVALUATION
+================================================================================
+                     Intervention  VehiclesSelected  FleetPercent  C4Found  C4Recall  C4Precision  Risk48Found  Risk48Recall  Risk48Precision
+            Priority Inspect Only               175        0.0347       13    0.1711       0.0743           14        0.1029        0.0800
+                Inspect or Higher               338        0.0670       21    0.2763       0.0621           24        0.1765        0.0710
+Manual Review / Inspect or Higher               338        0.0670       21    0.2763       0.0621           24        0.1765        0.0710
+       Enhanced Monitor or Higher               958        0.1899       26    0.3421       0.0271           41        0.3015        0.0428
+
+================================================================================
+BASELINE VS HYBRID CAPACITY EVALUATION
+================================================================================
+ Capacity  Vehicles  Baseline_C4_Found  Baseline_C4_Recall  Baseline_C4_Precision  Baseline_Risk48_Recall  Hybrid_C4_Found  Hybrid_C4_Recall  Hybrid_C4_Precision  Hybrid_Risk48_Recall  C4_Recall_Gain  Risk48_Recall_Gain
+    0.025       127                  7              0.0921                 0.0551                  0.0588               10       0.1316               0.0787                0.0735          0.0395              0.0147
+    0.050       253                 15              0.1974                 0.0593                  0.1250               16       0.2105               0.0632                0.1324          0.0132              0.0074
+    0.075       379                 20              0.2632                 0.0528                  0.1912               19       0.2500               0.0501                0.1838         -0.0132             -0.0074
+    0.100       505                 21              0.2763                 0.0416                  0.2059               22       0.2895               0.0436                0.2132          0.0132              0.0074
+    0.150       757                 29              0.3816                 0.0383                  0.3015               29       0.3816               0.0383                0.3088          0.0000              0.0074
+    0.200      1010                 36              0.4737                 0.0356                  0.3824               35       0.4605               0.0347                0.3824         -0.0132              0.0000
+
+====================================================================================================
+TEMPORAL REASONING ABLATION
+====================================================================================================
+
+Total vehicles: 5046
+Total C4: 76
+Total Risk48: 136
+
+====================================================================================================
+FULL ABLATION RESULTS
+====================================================================================================
+                          Method  Capacity  Vehicles  C4Found  C4Recall  C4Precision  Risk48Found  Risk48Recall  Risk48Precision
+                         ML Only     0.025       127        7    0.0921       0.0551            8        0.0588           0.0630
+                         ML Only     0.050       253       15    0.1974       0.0593           17        0.1250           0.0672
+                         ML Only     0.075       379       20    0.2632       0.0528           26        0.1912           0.0686
+                         ML Only     0.100       505       21    0.2763       0.0416           28        0.2059           0.0554
+                         ML Only     0.150       757       29    0.3816       0.0383           41        0.3015           0.0542
+                         ML Only     0.200      1010       36    0.4737       0.0356           52        0.3824           0.0515
+                ML + Persistence     0.025       127        4    0.0526       0.0315            5        0.0368           0.0394
+                ML + Persistence     0.050       253       12    0.1579       0.0474           15        0.1103           0.0593
+                ML + Persistence     0.075       379       15    0.1974       0.0396           21        0.1544           0.0554
+                ML + Persistence     0.100       505       21    0.2763       0.0416           27        0.1985           0.0535
+                ML + Persistence     0.150       757       28    0.3684       0.0370           39        0.2868           0.0515
+                ML + Persistence     0.200      1010       34    0.4474       0.0337           49        0.3603           0.0485
+              ML + Deterioration     0.025       127        9    0.1184       0.0709            9        0.0662           0.0709
+              ML + Deterioration     0.050       253       16    0.2105       0.0632           17        0.1250           0.0672
+              ML + Deterioration     0.075       379       22    0.2895       0.0580           26        0.1912           0.0686
+              ML + Deterioration     0.100       505       24    0.3158       0.0475           32        0.2353           0.0634
+              ML + Deterioration     0.150       757       29    0.3816       0.0383           41        0.3015           0.0542
+              ML + Deterioration     0.200      1010       34    0.4474       0.0337           49        0.3603           0.0485
+ML + Persistence + Deterioration     0.025       127        6    0.0789       0.0472            6        0.0441           0.0472
+ML + Persistence + Deterioration     0.050       253       14    0.1842       0.0553           16        0.1176           0.0632
+ML + Persistence + Deterioration     0.075       379       20    0.2632       0.0528           24        0.1765           0.0633
+ML + Persistence + Deterioration     0.100       505       24    0.3158       0.0475           30        0.2206           0.0594
+ML + Persistence + Deterioration     0.150       757       29    0.3816       0.0383           42        0.3088           0.0555
+ML + Persistence + Deterioration     0.200      1010       34    0.4474       0.0337           51        0.3750           0.0505
+                     Full Hybrid     0.025       127       10    0.1316       0.0787           10        0.0735           0.0787
+                     Full Hybrid     0.050       253       16    0.2105       0.0632           18        0.1324           0.0711
+                     Full Hybrid     0.075       379       19    0.2500       0.0501           25        0.1838           0.0660
+                     Full Hybrid     0.100       505       22    0.2895       0.0436           29        0.2132           0.0574
+                     Full Hybrid     0.150       757       29    0.3816       0.0383           42        0.3088           0.0555
+                     Full Hybrid     0.200      1010       35    0.4605       0.0347           52        0.3824           0.0515
+
+====================================================================================================
+C4 RECALL — REASONING ABLATION
+====================================================================================================
+                                  Recall@2.5%  Recall@5%  Recall@7.5%  Recall@10%  Recall@15%  Recall@20%
+Method                                                                                                   
+Full Hybrid                            0.1316     0.2105       0.2500      0.2895      0.3816      0.4605
+ML + Deterioration                     0.1184     0.2105       0.2895      0.3158      0.3816      0.4474
+ML + Persistence                       0.0526     0.1579       0.1974      0.2763      0.3684      0.4474
+ML + Persistence + Deterioration       0.0789     0.1842       0.2632      0.3158      0.3816      0.4474
+ML Only                                0.0921     0.1974       0.2632      0.2763      0.3816      0.4737
+
+====================================================================================================
+C4 PRECISION — REASONING ABLATION
