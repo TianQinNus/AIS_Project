@@ -1,0 +1,98 @@
+from sqlalchemy.orm import Session
+
+from app.repositories.dashboard_repository import (
+    DashboardRepository,
+)
+from app.schemas.dashboard import (
+    DashboardSummaryResponse,
+    FleetOverview,
+    MaintenancePlanSummary,
+    RiskAlert,
+    RiskOverview,
+    RiskSnapshotItem,
+)
+
+
+class DashboardService:
+
+    @staticmethod
+    def get_dashboard(
+        db: Session,
+    ) -> DashboardSummaryResponse:
+
+        summary = DashboardRepository.get_summary(db)
+
+        snapshot = DashboardRepository.get_risk_snapshot(db)
+
+        alerts = DashboardRepository.get_top_risk_alerts(
+            db,
+            limit=5,
+        )
+
+        analyzed = summary["analyzed"]
+
+        # Risk Snapshot
+        snapshot_items = []
+
+        for action, count in snapshot.items():
+            percentage = (
+                round(count / analyzed * 100, 1)
+                if analyzed
+                else 0.0
+            )
+
+            snapshot_items.append(
+                RiskSnapshotItem(
+                    action=action,
+                    count=count,
+                    percentage=percentage,
+                )
+            )
+
+        # Maintenance Plan Summary
+        maintenance_plan = MaintenancePlanSummary(
+            immediate=snapshot["PRIORITY_INSPECT"],
+            short_term=(
+                snapshot["INSPECT"]
+                + snapshot["ENHANCED_MONITOR"]
+            ),
+            monitor=(
+                snapshot["MONITOR"]
+                + snapshot["CONTINUE"]
+            ),
+        )
+
+        # Top Risk Alerts
+        risk_alerts = [
+            RiskAlert(
+                analysis_id=row["analysis_id"],
+                vehicle_id=row["vehicle_id"],
+                state=row["state"],
+                risk_score=float(
+                    row["risk6_percentile"] or 0
+                ),
+                priority=row["priority"],
+                action=row["action"],
+                reason=row["reason"],
+            )
+            for row in alerts
+        ]
+
+        return DashboardSummaryResponse(
+            fleet=FleetOverview(
+                total=summary["total_fleet"],
+                analyzed=analyzed,
+            ),
+            risk=RiskOverview(
+                at_risk=summary["at_risk"],
+                high=summary["high"],
+                critical=summary["critical"],
+                average_score=round(
+                    summary["average_risk_score"],
+                    4,
+                ),
+            ),
+            risk_snapshot=snapshot_items,
+            maintenance_plan=maintenance_plan,
+            top_risk_alerts=risk_alerts,
+        )
