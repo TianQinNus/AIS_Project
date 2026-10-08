@@ -152,6 +152,14 @@ def _seed() -> None:
         db.commit()
 
 
+def test_risk_curve_clock_label():
+    from app.services.operational_risk import _clock_label
+
+    moment = datetime(2026, 9, 27, 12, 0, tzinfo=timezone.utc)
+    assert _clock_label(moment) == "2026-09-27 12:00"
+    assert _clock_label(None) is None
+
+
 def test_label_mapping():
     assert predicted_state_label("C4") == "C4 · 0–6 units"
     assert history_label("STRONG") == "Strong"
@@ -191,6 +199,7 @@ def test_vehicle_list_and_detail():
             "VHC-66107",
             "VHC-10001",
         ]
+        assert data["items"][0]["state"] == "C4"
         assert data["items"][0]["predictedClass"] == "Priority Inspect"
         assert data["items"][0]["riskScore"] == 92
 

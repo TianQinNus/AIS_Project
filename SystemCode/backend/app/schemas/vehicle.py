@@ -11,6 +11,7 @@ class CamelModel(BaseModel):
 
 class VehicleListItem(CamelModel):
     vehicle_id: str
+    state: str
     predicted_class: str
     risk_score: int
 
@@ -28,7 +29,9 @@ class VehicleRiskReading(CamelModel):
 
 
 class VehicleTrendPoint(CamelModel):
-    label: str
+    label: str = Field(
+        description="Calendar time of this risk reading, formatted YYYY-MM-DD HH:MM.",
+    )
     risk48: float | None = None
     risk24: float | None = None
     risk12: float | None = None

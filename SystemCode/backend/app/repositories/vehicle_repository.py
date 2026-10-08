@@ -4,6 +4,15 @@ from sqlalchemy.orm import Session
 from app.models.analysis import Analysis
 from app.models.prediction_shap import PredictionShap
 
+# Latest-analysis classes shown by the fleet pages.
+FLEET_ACTIONS = (
+    "CONTINUE",
+    "MONITOR",
+    "ENHANCED_MONITOR",
+    "INSPECT",
+    "PRIORITY_INSPECT",
+)
+
 
 class VehicleRepository:
 
@@ -12,6 +21,7 @@ class VehicleRepository:
         return (
             select(
                 Analysis.vehicle_id,
+                Analysis.state,
                 Analysis.action,
                 Analysis.risk6_percentile,
                 func.row_number()
@@ -38,7 +48,10 @@ class VehicleRepository:
         page_size: int,
     ) -> tuple[int, list[dict]]:
         latest = cls._latest_analysis_subquery()
-        filters = [latest.c.row_num == 1]
+        filters = [
+            latest.c.row_num == 1,
+            latest.c.action.in_(FLEET_ACTIONS),
+        ]
 
         if action is not None:
             filters.append(latest.c.action == action)
@@ -60,6 +73,7 @@ class VehicleRepository:
         stmt = (
             select(
                 latest.c.vehicle_id,
+                latest.c.state,
                 latest.c.action,
                 latest.c.risk6_percentile,
             )

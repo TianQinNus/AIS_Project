@@ -31,7 +31,7 @@ def list_vehicles(
         default=None,
         description=(
             "Predicted class filter: Priority Inspect, Inspect, "
-            "Enhanced Monitor, Monitor, Continue, or Manual Review."
+            "Enhanced Monitor, Monitor, or Continue."
         ),
     ),
     page: int = Query(default=1, ge=1),

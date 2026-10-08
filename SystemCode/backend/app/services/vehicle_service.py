@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import ResourceNotFoundError
 from app.repositories.vehicle_repository import VehicleRepository
+from app.services.operational_risk import operational_risk_curve
 from app.schemas.vehicle import (
     VehicleDetailResponse,
     VehicleFactor,
@@ -46,8 +47,6 @@ _ACTION_FILTERS = {
     "enhanced_monitor": "ENHANCED_MONITOR",
     "monitor": "MONITOR",
     "continue": "CONTINUE",
-    "manual review": "MANUAL_REVIEW",
-    "manual_review": "MANUAL_REVIEW",
 }
 
 
@@ -90,12 +89,6 @@ _ACTIONS = {
         "green",
         "Continue",
     ),
-    "MANUAL_REVIEW": ActionPresentation(
-        "Manual Review",
-        "MANUAL REVIEW",
-        "purple",
-        "Manual Review",
-    ),
 }
 
 
@@ -130,7 +123,7 @@ def resolve_action_filter(value: str | None) -> str | None:
     raise VehicleQueryError(
         "Unknown predicted class "
         f"'{value}'. Use Priority Inspect, Inspect, "
-        "Enhanced Monitor, Monitor, Continue, or Manual Review."
+        "Enhanced Monitor, Monitor, or Continue."
     )
 
 
@@ -296,6 +289,7 @@ class VehicleService:
         items = [
             VehicleListItem(
                 vehicle_id=format_vehicle_id(row["vehicle_id"]),
+                state=(row["state"] or "Unknown").strip().upper(),
                 predicted_class=present_action(row["action"]).predicted_class,
                 risk_score=risk_score(row["risk6_percentile"]),
             )
@@ -328,23 +322,48 @@ class VehicleService:
         )
         presentation = present_action(latest["action"])
 
-        # Risk48 and Risk12 probabilities are not stored. The detail cards and
-        # chart use the saved fleet percentiles on a 0–1 scale. Risk6 uses the
-        # stored probability. Risk24 is not persisted.
-        risk48 = _percentile_unit(latest["risk48_percentile"])
-        risk12 = _percentile_unit(latest["risk12_percentile"])
-        risk6 = _unit_interval(latest["risk6_score"])
-
-        trend = [
-            VehicleTrendPoint(
-                label=_trend_label(row["prediction_at"]),
-                risk48=_percentile_unit(row["risk48_percentile"]),
-                risk24=None,
-                risk12=_percentile_unit(row["risk12_percentile"]),
-                risk6=_unit_interval(row["risk6_score"]),
-            )
-            for row in history
-        ]
+        curve = operational_risk_curve(db, vehicle_id)
+        if curve:
+            latest_curve = curve[-1]
+            risk48 = latest_curve["risk48"]
+            risk24 = latest_curve["risk24"]
+            risk12 = latest_curve["risk12"]
+            risk6 = latest_curve["risk6"]
+            trend = [
+                VehicleTrendPoint(
+                    label=point["label"],
+                    risk48=point["risk48"],
+                    risk24=point["risk24"],
+                    risk12=point["risk12"],
+                    risk6=point["risk6"],
+                )
+                for point in curve
+            ]
+            risk_readings = [
+                VehicleRiskReading(label="Risk48", value=_format_unit(risk48)),
+                VehicleRiskReading(label="Risk24", value=_format_unit(risk24)),
+                VehicleRiskReading(label="Risk12", value=_format_unit(risk12)),
+                VehicleRiskReading(label="Risk6", value=_format_unit(risk6)),
+            ]
+        else:
+            risk48 = _percentile_unit(latest["risk48_percentile"])
+            risk12 = _percentile_unit(latest["risk12_percentile"])
+            risk6 = _unit_interval(latest["risk6_score"])
+            trend = [
+                VehicleTrendPoint(
+                    label=_trend_label(row["prediction_at"]),
+                    risk48=_percentile_unit(row["risk48_percentile"]),
+                    risk24=None,
+                    risk12=_percentile_unit(row["risk12_percentile"]),
+                    risk6=_unit_interval(row["risk6_score"]),
+                )
+                for row in history
+            ]
+            risk_readings = [
+                VehicleRiskReading(label="Risk48", value=_format_unit(risk48)),
+                VehicleRiskReading(label="Risk12", value=_format_unit(risk12)),
+                VehicleRiskReading(label="Risk6", value=_format_unit(risk6)),
+            ]
 
         return VehicleDetailResponse(
             vehicle_id=format_vehicle_id(vehicle_id),
@@ -353,11 +372,7 @@ class VehicleService:
             predicted_state=predicted_state_label(latest["state"]),
             action=presentation.action_label,
             history=history_label(latest["history_quality"]),
-            risks=[
-                VehicleRiskReading(label="Risk48", value=_format_unit(risk48)),
-                VehicleRiskReading(label="Risk12", value=_format_unit(risk12)),
-                VehicleRiskReading(label="Risk6", value=_format_unit(risk6)),
-            ],
+            risks=risk_readings,
             trend=trend,
             rule=latest["rule_id"] or "",
             reasons=split_reasons(latest["evidence"], latest["reason"]),
