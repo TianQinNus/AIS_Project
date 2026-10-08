@@ -10,11 +10,14 @@ MODEL_DIR = BASE_DIR / "processed" / "final_model"
 if __name__ == "__main__":
     result = run_fleetcare_prediction(
         model_dir=MODEL_DIR,
-        username="root",
+
+        # PostgreSQL connection
+        username="tianqin-gg",
         password="",
         host="127.0.0.1",
-        port=3306,
-        database="fleetcareai",
+        port=5432,
+        database="fleetcare",
+
         analysis_table="analysis",
         shap_table="prediction_shap",
         top_shap=5,

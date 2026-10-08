@@ -1717,23 +1717,30 @@ class FleetCarePredictor:
         return df[[c for c in columns if c in df.columns]].copy()
 
 
-
-def _create_mysql_engine(username, password, host, port, database):
+def _create_db_engine(
+    username,
+    password,
+    host,
+    port,
+    database,
+):
     from sqlalchemy import create_engine
     from sqlalchemy.engine import URL
 
     url = URL.create(
-        drivername="mysql+pymysql",
+        drivername="postgresql+psycopg2",
         username=username,
         password=password,
         host=host,
         port=port,
         database=database,
     )
-    return create_engine(url, pool_pre_ping=True)
 
-
-def _load_fleet_from_mysql(engine):
+    return create_engine(
+        url,
+        pool_pre_ping=True,
+    )
+def _load_fleet_from_db(engine):
     operational = pd.read_sql(
         "SELECT * FROM truck_readout ORDER BY vehicle_id, time_step",
         engine,
@@ -1760,9 +1767,8 @@ def _build_analysis_dataframe(result):
     """
     Convert full FleetCare inference output into the
     compact production `analysis` table schema.
-
     Internal model/reasoning variables remain in `result`
-    but are not persisted to MySQL.
+    but are not persisted to PostgreSQL.
     """
 
     required_columns = [
@@ -1842,9 +1848,8 @@ def _build_analysis_dataframe(result):
 
         "risk6_deterioration_percentile":
             result["Risk6_trend_percentile"].round(2),
-
         "class_worsening":
-            result["is_class_worsening"].astype(int),
+            result["is_class_worsening"].astype(bool),
 
         # ====================================================
         # Rule engine
@@ -1885,11 +1890,14 @@ def _insert_analysis_and_get_ids(analysis_df, engine, table_name):
     from sqlalchemy import text
     with engine.connect() as conn:
         inserted = pd.read_sql(
-            text(f"""
-                SELECT analysis_id, vehicle_id, prediction_at
-                FROM `{table_name}`
-                WHERE prediction_at = :prediction_at
-            """),
+        text(f"""
+            SELECT
+                analysis_id,
+                vehicle_id,
+                prediction_at
+            FROM {table_name}
+            WHERE prediction_at = :prediction_at
+        """),
             conn,
             params={"prediction_at": prediction_at.to_pydatetime()},
         )
@@ -2463,24 +2471,29 @@ def _save_shap(shap_df, inserted_analysis, engine, shap_table):
 
 def run_fleetcare_prediction(
     model_dir,
-    username="root",
+    username="postgres",
     password="",
     host="127.0.0.1",
-    port=3306,
+    port=5432,
     database="fleetcareai",
     analysis_table="analysis",
     shap_table="prediction_shap",
     top_shap=5,
-    
 ):
-    """MySQL -> FleetCare inference -> analysis -> Top-N SHAP -> prediction_shap."""
     print("=" * 80)
-    print("FLEETCARE AI - MYSQL INFERENCE + SHAP")
+    print("FLEETCARE AI - POSTGRESQL INFERENCE + SHAP")
     print("=" * 80)
+    engine = _create_db_engine(
+        username,
+        password,
+        host,
+        port,
+        database,
+    )
 
-    engine = _create_mysql_engine(username, password, host, port, database)
-    operational, specifications = _load_fleet_from_mysql(engine)
-
+    operational, specifications = (
+        _load_fleet_from_db(engine)
+)
     predictor = FleetCarePredictor(model_dir=model_dir)
     result = predictor.predict(operational, specifications)
 
@@ -2512,18 +2525,3 @@ def run_fleetcare_prediction(
 
     return analysis_df
 
-
-if __name__ == "__main__":
-    BASE_DIR = Path(__file__).resolve().parent
-    result = run_fleetcare_prediction(
-        model_dir=BASE_DIR / "processed" / "final_model",
-        username="root",
-        password="",
-        host="127.0.0.1",
-        port=3306,
-        database="fleetcareai",
-        analysis_table="analysis",
-        shap_table="prediction_shap",
-        top_shap=5,
-    )
-    print(result.head().to_string(index=False))
