@@ -39,6 +39,14 @@ _STATE_WINDOWS = {
     "C4": "0–6 units",
 }
 
+_STATE_RISK_CLASS = {
+    "C0": "Beyond 48",
+    "C1": "Risk48",
+    "C2": "Risk24",
+    "C3": "Risk12",
+    "C4": "Risk6",
+}
+
 _ACTION_FILTERS = {
     "priority inspect": "PRIORITY_INSPECT",
     "priority_inspect": "PRIORITY_INSPECT",
@@ -239,6 +247,21 @@ def _trend_label(value: object) -> str:
     return str(value)
 
 
+def _daily_class_trend(history: list[dict]) -> list[VehicleTrendPoint]:
+    """One point per calendar day: the class with the highest probability."""
+    by_day: dict[str, VehicleTrendPoint] = {}
+    for row in history:
+        label = _trend_label(row["prediction_at"])
+        by_day[label[:10]] = VehicleTrendPoint(
+            label=label,
+            risk_class=_STATE_RISK_CLASS.get(
+                (row["state"] or "").strip().upper(),
+                "Beyond 48",
+            ),
+        )
+    return list(by_day.values())
+
+
 def build_factors(rows: list[dict]) -> list[VehicleFactor]:
     magnitudes = [abs(float(row["shap_value"])) for row in rows]
     peak = max(magnitudes) if magnitudes else 0.0
@@ -322,6 +345,7 @@ class VehicleService:
         )
         presentation = present_action(latest["action"])
 
+        trend = _daily_class_trend(history)
         curve = operational_risk_curve(db, vehicle_id)
         if curve:
             latest_curve = curve[-1]
@@ -329,16 +353,6 @@ class VehicleService:
             risk24 = latest_curve["risk24"]
             risk12 = latest_curve["risk12"]
             risk6 = latest_curve["risk6"]
-            trend = [
-                VehicleTrendPoint(
-                    label=point["label"],
-                    risk48=point["risk48"],
-                    risk24=point["risk24"],
-                    risk12=point["risk12"],
-                    risk6=point["risk6"],
-                )
-                for point in curve
-            ]
             risk_readings = [
                 VehicleRiskReading(label="Risk48", value=_format_unit(risk48)),
                 VehicleRiskReading(label="Risk24", value=_format_unit(risk24)),
@@ -349,16 +363,6 @@ class VehicleService:
             risk48 = _percentile_unit(latest["risk48_percentile"])
             risk12 = _percentile_unit(latest["risk12_percentile"])
             risk6 = _unit_interval(latest["risk6_score"])
-            trend = [
-                VehicleTrendPoint(
-                    label=_trend_label(row["prediction_at"]),
-                    risk48=_percentile_unit(row["risk48_percentile"]),
-                    risk24=None,
-                    risk12=_percentile_unit(row["risk12_percentile"]),
-                    risk6=_unit_interval(row["risk6_score"]),
-                )
-                for row in history
-            ]
             risk_readings = [
                 VehicleRiskReading(label="Risk48", value=_format_unit(risk48)),
                 VehicleRiskReading(label="Risk12", value=_format_unit(risk12)),

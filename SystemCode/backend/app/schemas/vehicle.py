@@ -30,12 +30,11 @@ class VehicleRiskReading(CamelModel):
 
 class VehicleTrendPoint(CamelModel):
     label: str = Field(
-        description="Calendar time of this risk reading, formatted YYYY-MM-DD HH:MM.",
+        description="Calendar day of this prediction, formatted YYYY-MM-DD HH:MM.",
     )
-    risk48: float | None = None
-    risk24: float | None = None
-    risk12: float | None = None
-    risk6: float | None = None
+    risk_class: str = Field(
+        description="Single predicted window: Risk6, Risk12, Risk24, Risk48, or Beyond 48.",
+    )
 
 
 class VehicleFactor(CamelModel):

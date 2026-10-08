@@ -243,10 +243,11 @@ def test_vehicle_list_and_detail():
             {"label": "Risk12", "value": "0.679"},
             {"label": "Risk6", "value": "0.431"},
         ]
-        assert body["trend"][0]["risk24"] is None
         assert len(body["trend"]) == 2
-        assert body["trend"][0]["risk6"] == 0.21
-        assert body["trend"][1]["risk6"] == 0.431
+        assert body["trend"][0]["label"] == "2026-09-24 08:00"
+        assert body["trend"][0]["riskClass"] == "Risk12"
+        assert body["trend"][1]["label"] == "2026-10-01 08:00"
+        assert body["trend"][1]["riskClass"] == "Risk6"
         assert body["reasons"][0] == "current model state is C4"
         assert body["factors"][0] == {"name": "397_12 rate", "impact": 1.0}
         assert body["factors"][1]["impact"] == 0.5

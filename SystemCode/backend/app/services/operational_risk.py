@@ -61,16 +61,25 @@ def _round_risk(value: float) -> float:
     return round(float(value), 3)
 
 
+# argmax class -> the one repair window that prediction falls in.
+_RISK_CLASS = {
+    0: "Beyond 48",
+    1: "Risk48",
+    2: "Risk24",
+    3: "Risk12",
+    4: "Risk6",
+}
+
+
 def operational_risk_curve(
     db: Session,
     vehicle_id: int,
 ) -> list[dict] | None:
-    """Risk probabilities at each readout time for one vehicle.
+    """One predicted risk class at each readout time for one vehicle.
 
-    The label is the readout's calendar time. Risk48, Risk24, Risk12 and
-    Risk6 are nested class probabilities from the same prediction, so
-    Risk48 >= Risk24 >= Risk12 >= Risk6. At a given time, the elevated
-    curves show which repair window the vehicle is in.
+    The label is the readout's calendar time. risk_class is the single
+    window the model assigns at that time: Risk6, Risk12, Risk24, Risk48,
+    or Beyond 48.
     """
 
     try:
@@ -143,6 +152,7 @@ def _operational_risk_curve(
     )
     probabilities = predictor.model.predict_proba(model_input)
 
+    predicted = probabilities.argmax(axis=1)
     risk48 = probabilities[:, 1:].sum(axis=1)
     risk24 = probabilities[:, 2:].sum(axis=1)
     risk12 = probabilities[:, 3:].sum(axis=1)
@@ -158,9 +168,14 @@ def _operational_risk_curve(
         clock = _clock_label(clocks.iloc[index]) if clocks is not None else None
         labels.append(clock or _time_label(time_step))
 
+    # A single shared timestamp is the load time, not a timeline.
+    if len(set(labels)) <= 1:
+        labels = [_time_label(value) for value in history["time_step"]]
+
     return [
         {
             "label": labels[index],
+            "risk_class": _RISK_CLASS[int(predicted[index])],
             "risk48": _round_risk(risk48[index]),
             "risk24": _round_risk(risk24[index]),
             "risk12": _round_risk(risk12[index]),
