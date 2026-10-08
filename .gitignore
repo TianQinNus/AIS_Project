@@ -1,0 +1,10 @@
+
+
+# Local credentials and generated RAG cache
+.DS_Store
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.rag.example
+/SystemCode/data/knowledge_index/

@@ -44,7 +44,10 @@ def get_vehicle_analysis(
     for one vehicle.
     """
 
-    vehicle_id = int(vehicle_id)
+    if isinstance(vehicle_id, bool) or not isinstance(vehicle_id, int):
+        raise ValueError("vehicle_id must be an integer")
+    if not 1 <= history_limit <= 20:
+        raise ValueError("history_limit must be between 1 and 20")
 
     # ========================================================
     # 1. GET RECENT ANALYSIS HISTORY
@@ -84,7 +87,7 @@ def get_vehicle_analysis(
 
         WHERE vehicle_id = :vehicle_id
 
-        ORDER BY prediction_at DESC
+        ORDER BY prediction_at DESC, analysis_id DESC
 
         LIMIT :history_limit
         """
@@ -216,7 +219,7 @@ def get_vehicle_analysis(
                     ),
 
                 "shap_value":
-                    float(row["shap_value"]),
+                    (float(row["shap_value"]) if row["shap_value"] is not None else None),
             }
         )
 
@@ -227,6 +230,11 @@ def get_vehicle_analysis(
     return {
 
         "success": True,
+        "history_semantics": "Recent stored analysis runs ordered by prediction_at; not necessarily distinct operational readouts.",
+        "units": {"risk6_score": "0-1 model score, not calibrated repair probability",
+                  "percentile": "0-100 fleet-relative rank",
+                  "repair_horizon": "operational units, not calendar days",
+                  "prediction_at": "analysis run timestamp, not operational observation time"},
 
         "vehicle_id":
             vehicle_id,
@@ -305,7 +313,8 @@ def get_vehicle_analysis(
                 ),
 
             "class_worsening":
-                bool(current["class_worsening"]),
+                (bool(current["class_worsening"])
+                 if current["class_worsening"] is not None else None),
 
             "rule_id":
                 current["rule_id"],

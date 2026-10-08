@@ -1,0 +1,108 @@
+[
+  {
+    "source": "maintenance/daily_checks.md",
+    "title": "出车前通用检查 Daily walkaround inspection",
+    "kind": "maintenance",
+    "version": "FleetCare curated summary v1, 2026-10-08",
+    "reviewed": true,
+    "review_level": "source_checked_only",
+    "expert_validated": false,
+    "applicability": "General reference only; vehicle/engine identity and Component X mapping unverified. UK guidance is not Singapore law; Australian 2020 schedules are not adopted.",
+    "source_url": "https://www.gov.uk/guidance/carry-out-daily-heavy-goods-vehicle-hgv-walkaround-checks"
+  },
+  {
+    "source": "maintenance/brakes_tyres.md",
+    "title": "制动与轮胎通用检查 Brakes and tyres",
+    "kind": "maintenance",
+    "version": "FleetCare curated summary v1, 2026-10-08",
+    "reviewed": true,
+    "review_level": "source_checked_only",
+    "expert_validated": false,
+    "applicability": "General reference only; vehicle/engine identity and Component X mapping unverified. UK guidance is not Singapore law; Australian 2020 schedules are not adopted.",
+    "source_url": "https://www.gov.uk/guidance/carry-out-daily-heavy-goods-vehicle-hgv-walkaround-checks"
+  },
+  {
+    "source": "maintenance/defect_reporting.md",
+    "title": "缺陷记录与途中处置 Defect reporting",
+    "kind": "maintenance",
+    "version": "FleetCare curated summary v1, 2026-10-08",
+    "reviewed": true,
+    "review_level": "source_checked_only",
+    "expert_validated": false,
+    "applicability": "General reference only; vehicle/engine identity and Component X mapping unverified. UK guidance is not Singapore law; Australian 2020 schedules are not adopted.",
+    "source_url": "https://www.gov.uk/guidance/carry-out-daily-heavy-goods-vehicle-hgv-walkaround-checks"
+  },
+  {
+    "source": "maintenance/inspection_planning.md",
+    "title": "日常与定期检查 Maintenance inspection planning",
+    "kind": "maintenance",
+    "version": "FleetCare curated summary v1, 2026-10-08",
+    "reviewed": true,
+    "review_level": "source_checked_only",
+    "expert_validated": false,
+    "applicability": "General reference only; vehicle/engine identity and Component X mapping unverified. UK guidance is not Singapore law; Australian 2020 schedules are not adopted.",
+    "source_url": "https://www.hse.gov.uk/workplacetransport/vehicles/inspection.htm"
+  },
+  {
+    "source": "maintenance/scania_service_scope.md",
+    "title": "Scania 保养计划的适用范围 Preventative maintenance scope",
+    "kind": "maintenance",
+    "version": "FleetCare curated summary v1, 2026-10-08",
+    "reviewed": true,
+    "review_level": "source_checked_only",
+    "expert_validated": false,
+    "applicability": "General reference only; vehicle/engine identity and Component X mapping unverified. UK guidance is not Singapore law; Australian 2020 schedules are not adopted.",
+    "source_url": "https://www.scania.com/content/dam/scanianoe/market/au/products-and-services/services/ScaniaPreventativeMaintenanceGuides_A3_October2020_FINAL.pdf"
+  },
+  {
+    "source": "maintenance/oem_information.md",
+    "title": "获取准确的 Scania 维修资料 OEM repair information",
+    "kind": "maintenance",
+    "version": "FleetCare curated summary v1, 2026-10-08",
+    "reviewed": true,
+    "review_level": "source_checked_only",
+    "expert_validated": false,
+    "applicability": "General reference only; vehicle/engine identity and Component X mapping unverified. UK guidance is not Singapore law; Australian 2020 schedules are not adopted.",
+    "source_url": "https://www.scania.com/group/en/home/products-and-services/services/rmi.html"
+  },
+  {
+    "source": "project/fleetcare_policy.md",
+    "title": "FleetCare 项目定义与知识边界",
+    "kind": "project",
+    "version": "FleetCare curated summary v1, 2026-10-08",
+    "reviewed": true,
+    "review_level": "code_checked_project_policy",
+    "expert_validated": false,
+    "applicability": "FleetCare prototype only; not an OEM maintenance standard."
+  },
+  {
+    "source": "project/inspection_handoff.md",
+    "title": "FleetCare 检查交接建议 Project-authored workflow",
+    "kind": "project",
+    "version": "FleetCare curated summary v1, 2026-10-08",
+    "reviewed": true,
+    "review_level": "code_checked_project_policy",
+    "expert_validated": false,
+    "applicability": "FleetCare prototype only; not an OEM maintenance standard."
+  },
+  {
+    "source": "dataset/2024_IDA_challenge_v2.pdf",
+    "title": "2024_IDA_challenge_v2",
+    "kind": "dataset",
+    "version": "Supplied repository document at 339c8b2",
+    "reviewed": true,
+    "review_level": "dataset_scope_checked",
+    "expert_validated": false,
+    "applicability": "Anonymised Scania Component X dataset/task documentation; not a mechanical repair manual."
+  },
+  {
+    "source": "dataset/Scania_component_X_PdM.pdf",
+    "title": "Scania_component_X_PdM",
+    "kind": "dataset",
+    "version": "Supplied repository document at 339c8b2",
+    "reviewed": true,
+    "review_level": "dataset_scope_checked",
+    "expert_validated": false,
+    "applicability": "Anonymised Scania Component X dataset/task documentation; not a mechanical repair manual."
+  }
+]

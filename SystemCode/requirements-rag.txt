@@ -1,0 +1,9 @@
+# Add to your existing model environment. Python 3.10+.
+# Freeze exact versions after running the integration checks in your environment.
+openai>=1.66,<3
+SQLAlchemy>=2.0,<3
+PyMySQL[rsa]>=1.1,<2
+pypdf>=5,<7
+python-docx>=1.1,<2
+sentence-transformers>=3,<6
+numpy>=1.26,<3

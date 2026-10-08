@@ -1,0 +1,14 @@
+{"question":"出车前应该检查哪些警告灯？", "kind":"maintenance", "expected_any_source":["maintenance/daily_checks.md"]}
+{"question":"气压建立异常和制动管路漏气应检查什么？", "kind":"maintenance", "expected_any_source":["maintenance/brakes_tyres.md"]}
+{"question":"轮胎出现露帘线或者车轮松动，通用检查内容是什么？", "kind":"maintenance", "expected_any_source":["maintenance/brakes_tyres.md"]}
+{"question":"司机发现缺陷应该记录哪些内容？", "kind":"maintenance", "expected_any_source":["maintenance/defect_reporting.md"]}
+{"question":"Can a dangerous defect be ignored during a journey?", "kind":"maintenance", "expected_any_source":["maintenance/defect_reporting.md"]}
+{"question":"How should planned maintenance inspections be arranged?", "kind":"maintenance", "expected_any_source":["maintenance/inspection_planning.md", "maintenance/scania_service_scope.md"]}
+{"question":"Scania澳大利亚2020保养计划可以直接适用于所有车型吗？", "kind":"maintenance", "expected_any_source":["maintenance/scania_service_scope.md"]}
+{"question":"哪里获取Scania官方维修技术资料和诊断信息？", "kind":"maintenance", "expected_any_source":["maintenance/oem_information.md"]}
+{"question":"TR1为什么对应PRIORITY_INSPECT？", "kind":"project", "expected_any_source":["project/fleetcare_policy.md"]}
+{"question":"What does Risk6 mean and is it a calibrated probability?", "kind":"project", "expected_any_source":["project/fleetcare_policy.md"]}
+{"question":"数据库prediction_at是否代表车辆运行读数时间？", "kind":"project", "expected_any_source":["project/fleetcare_policy.md"]}
+{"question":"SHAP能确定Component X具体是什么零件吗？", "kind":"project", "expected_any_source":["project/fleetcare_policy.md"]}
+{"question":"模型给出INSPECT后怎样准备检查交接？", "kind":"project", "expected_any_source":["project/inspection_handoff.md"]}
+{"question":"如何制作巧克力蛋糕？", "kind":"maintenance", "expected_any_source":[]}
