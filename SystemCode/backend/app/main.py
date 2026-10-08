@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.dashboard import router as dashboard_router
+from app.api.vehicle import router as vehicle_router
 from app.core.config import settings
 from app.core.exceptions import ResourceNotFoundError
 
@@ -25,6 +26,11 @@ app.add_middleware(
 
 app.include_router(
     dashboard_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    vehicle_router,
     prefix="/api/v1",
 )
 
