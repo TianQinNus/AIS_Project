@@ -28,6 +28,7 @@ def test_dashboard():
     assert "risk" in data
     assert "risk_snapshot" in data
     assert "top_risk_alerts" in data
+    assert "manual_review" in data["maintenance_plan"]
 
     assert isinstance(
         data["fleet"]["total"],

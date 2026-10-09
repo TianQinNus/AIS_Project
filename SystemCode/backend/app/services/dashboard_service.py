@@ -60,6 +60,7 @@ class DashboardService:
                 snapshot["MONITOR"]
                 + snapshot["CONTINUE"]
             ),
+            manual_review=snapshot["MANUAL_REVIEW"],
         )
 
         # Top Risk Alerts

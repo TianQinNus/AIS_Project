@@ -131,6 +131,8 @@ class DashboardRepository:
             "ENHANCED_MONITOR": 0,
             "INSPECT": 0,
             "PRIORITY_INSPECT": 0,
+            "MANUAL_REVIEW": 0,
+            "COLLECT_MORE_DATA": 0
         }
 
         for action, count in rows:
