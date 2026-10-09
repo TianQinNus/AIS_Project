@@ -11,6 +11,9 @@ class RiskOverview(BaseModel):
     high: int
     critical: int
     average_score: float
+    previous_average_score: float | None
+    average_score_change: float | None
+    average_score_trend: str
 
 
 class RiskSnapshotItem(BaseModel):
