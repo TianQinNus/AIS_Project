@@ -32,6 +32,7 @@ class MaintenancePlanSummary(BaseModel):
     immediate: int
     short_term: int
     monitor: int
+    manual_review: int
 
 
 class DashboardSummaryResponse(BaseModel):

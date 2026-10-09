@@ -12,6 +12,15 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
 
+    # Qwen
+    dashscope_api_key: str
+
+    qwen_base_url: str 
+
+    llm_model: str = "qwen3.5-flash"
+
+    llm_enable_thinking: bool = False
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

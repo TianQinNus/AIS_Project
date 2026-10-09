@@ -6,6 +6,7 @@ from app.api.dashboard import router as dashboard_router
 from app.core.config import settings
 from app.core.exceptions import ResourceNotFoundError
 
+from app.api.chat import router as chat_router
 
 app = FastAPI(
     title=settings.app_name,
@@ -28,6 +29,10 @@ app.include_router(
     prefix="/api/v1",
 )
 
+app.include_router(
+    chat_router,
+    prefix="/api/v1",
+)
 
 @app.exception_handler(ResourceNotFoundError)
 async def resource_not_found_handler(
