@@ -1,132 +1,43 @@
-﻿### [ Practice Module ] Project Submission Template: Github Repository & Zip File
+# FleetCare AI — Group 47
 
-**[ Naming Convention ]** CourseCode-StartDate-BatchCode-TeamName-ProjectName.zip
+FleetCare 是车队维护决策支持原型：XGBoost 预测 + 时序规则推理 + SHAP 解释 + 官方知识 RAG。此 model 分支包含模型工作和 RAG 模块；网页团队可通过 Python 或 HTTP 入口接入。RAG 不执行真实维修或代替机械故障诊断。
 
-* **[ MTech Thru-Train Group Project Naming Example ]** IRS-PM-2020-01-18-IS02PT-GRP-AwsomeSG-HDB_BTO_Recommender.zip
+## 当前 RAG 进度（2026-10-11）
 
-* **[ MTech Stackable Group Project Naming Example ]** IRS-PM-2020-01-18-STK02-GRP-AwsomeSG-HDB_BTO_Recommender.zip
+- 官方原文快照：DVSA、HSE、LTA 检验、LTA 商用车，另有明确标注的项目规则说明。
+- 本地 SQLite 向量库：5 份有效资料、273 个片段、384 维向量；替代旧 index.npz 查询。
+- 原文出处、地区、核验日期、审核期限和 SHA-256 可追溯；过期源不参与检索。
+- Agent 汇总 MySQL 中已有车辆分析与知识库证据，输出正文、车辆结果、引用及警告。
+- 新增 rag_http_api.py：综合问答与严格分类的知识检索两个 HTTP 入口。
+- 已提供只含有效版本的 knowledge_seed/fleetcare_knowledge.sqlite3；模型权重另行准备。
 
-[Online editor for this README.md markdown file](https://pandao.github.io/editor.md/en.html "pandao")
+## 文档入口
 
----
+- **网页团队接入必读：[README_RAG_WEB.md](SystemCode/data/README_RAG_WEB.md)**：安装、HTTP 请求/响应、JavaScript 示例、maintenance 范围与异常处理。
+- [RAG 安装与知识维护](SystemCode/data/README_RAG.md)
+- [原文目录](SystemCode/data/RAG_KNOWLEDGE_MANUAL.md)
+- [最新 RAG 进度与交接](SystemCode/data/RAG_PROGRESS.md)
+- [模型开发与评估记录](SystemCode/data/目前进展.txt)：原有模型记录保留，RAG 更新在文件顶部。
 
-### <<<<<<<<<<<<<<<<<<<< Start of Template >>>>>>>>>>>>>>>>>>>>
+## 网页团队快速启动
 
----
+```bash
+python -m pip install -r SystemCode/requirements-rag-web.txt
+cd SystemCode/data
+python build_knowledge.py --allow-model-download
+python evaluate_knowledge.py
+# 根据 .env.rag.example export 后端实际配置
+python -m uvicorn rag_http_api:app --host 127.0.0.1 --port 8000
+```
 
-## SECTION 1 : PROJECT TITLE
-## Singapore Housing & Deveoplment Board - BTO Recommender System
+POST /api/rag/search 仅检索本地证据，不需要 OpenAI/MySQL；POST /api/rag/ask 生成自然语言回答，车辆问题读取 MySQL。OpenAI 与数据库凭据仅保存在服务端。Swagger 位于本地 /docs；尚未部署公网地址。
 
-<img src="SystemCode/clips/static/hdb-bto.png"
-     style="float: left; margin-right: 0px;" />
+## maintenance 知识的定位
 
----
+提供日常检查、制动/轮胎/警告灯/泄漏检查参考、缺陷报告、计划维护与操作安全指导。新加坡检验频率属于 policy，TR/Risk/SHAP 定义属于 project，具体车辆优先级来自 MySQL。没有车型 OEM 手册时，不能确认具体故障、零件、扭矩或拆装工序。
 
-## SECTION 2 : EXECUTIVE SUMMARY / PAPER ABSTRACT
-Singapore ranks amongst countries with the highest population density in the world. In a bid to have firm control over long term urban planning, the Singapore government came up with the “Built to Order” (abbreviated BTO) initiative back in 2001. These are new Housing Development Board (HDB) flats tightly controlled by their eligibility and quantity released every year. In more recent years, the modern BTO scheme in Singapore requires a waiting period of 3-4 years, and is generally targeted at young Singaporean couples looking to purchase their first property and set up a family. Nationality and income ceilings are some of the broad filters that determine one’s eligibility for the highly sought after projects. 
+## 验证与提交材料
 
+32 项单元测试、13 条真实向量检索用例通过；检索已验证可在无网络、无原文目录条件下工作。HTTP 联调不等于真实 OpenAI/MySQL 端到端验证，后者由团队配置实际凭据后完成。
 
-Our team, comprising of 6 young Singaporeans, all hope to be property owners one day. Many of our peers opt for BTO flats due to their affordability, existence of financial aid from the government, as well as their resale value. However, there often exists a knowledge gap for these young couples during the decision making process and they end up making potentially regretful decisions. We would like to bridge this knowledge gap, and have hence chosen to base our project on creating a recommender system for BTO flats, utilizing the data from recent launches in Tampines, Eunos, Sengkang and Punggol. 
-
-
-Using the techniques imparted to us in lectures, our group first set out to build a sizeable knowledge base via conducting an interview and administering a survey. While building the system, we utilized tools such as Java to scrape real time data from HDB website and transform it into a database, CLIPS to synthesize the rule based reasoning process, and Python to integrate it into an easy to use UI for the everyday user. To add icing on the cake, we even hosted the system on a website so that the everyday user can access it through the click of a link.
-
-
-Our team had an amazing time working on this project, and hope to share our insights with everyone. Despite a focus on BTO flats, we would recommend it for everybody interested in understanding property market trends for residence or investment purposes. There truly are a wide array of factors behind the decision to invest in a property, and we only wish there was more time to work on the scope and scale of the project. 
-
----
-
-## SECTION 3 : CREDITS / PROJECT CONTRIBUTION
-
-| Official Full Name  | Student ID (MTech Applicable)  | Work Items (Who Did What) | Email (Optional) |
-| :------------ |:---------------:| :-----| :-----|
-| Desmond Chua | A1234567A | xxxxxxxxxx yyyyyyyyyy zzzzzzzzzz| A1234567A@nus.edu.sg |
-| Yucheng Gong | A1234567B | xxxxxxxxxx yyyyyyyyyy zzzzzzzzzz| A1234567B@gmail.com |
-| Chee Jia Wei | A1234567C | xxxxxxxxxx yyyyyyyyyy zzzzzzzzzz| A1234567C@outlook.com |
-| Ganesh Kumar | A1234567D | xxxxxxxxxx yyyyyyyyyy zzzzzzzzzz| A1234567D@yahoo.com |
-| Jeanette Lim | A1234567E | xxxxxxxxxx yyyyyyyyyy zzzzzzzzzz| A1234567E@qq.com |
-
----
-
-## SECTION 4 : VIDEO OF SYSTEM MODELLING & USE CASE DEMO
-
-[![Sudoku AI Solver](http://img.youtube.com/vi/-AiYLUjP6o8/0.jpg)](https://youtu.be/-AiYLUjP6o8 "Sudoku AI Solver")
-
-Note: It is not mandatory for every project member to appear in video presentation; Presentation by one project member is acceptable. 
-More reference video presentations [here](https://telescopeuser.wordpress.com/2018/03/31/master-of-technology-solution-know-how-video-index-2/ "video presentations")
-
----
-
-## SECTION 5 : USER GUIDE
-
-`Refer to appendix <Installation & User Guide> in project report at Github Folder: ProjectReport`
-
-### [ 1 ] To run the system using iss-vm
-
-> download pre-built virtual machine from http://bit.ly/iss-vm
-
-> start iss-vm
-
-> open terminal in iss-vm
-
-> $ git clone https://github.com/telescopeuser/Workshop-Project-Submission-Template.git
-
-> $ source activate iss-env-py2
-
-> (iss-env-py2) $ cd Workshop-Project-Submission-Template/SystemCode/clips
-
-> (iss-env-py2) $ python app.py
-
-> **Go to URL using web browser** http://0.0.0.0:5000 or http://127.0.0.1:5000
-
-### [ 2 ] To run the system in other/local machine:
-### Install additional necessary libraries. This application works in python 2 only.
-
-> $ sudo apt-get install python-clips clips build-essential libssl-dev libffi-dev python-dev python-pip
-
-> $ pip install pyclips flask flask-socketio eventlet simplejson pandas
-
----
-## SECTION 6 : PROJECT REPORT / PAPER
-
-`Refer to project report at Github Folder: ProjectReport`
-
-**Recommended Sections for Project Report / Paper:**
-- Executive Summary / Paper Abstract
-- Sponsor Company Introduction (if applicable)
-- Business Problem Background
-- Market Research
-- Project Objectives & Success Measurements
-- Project Solution (To detail domain modelling & system design.)
-- Project Implementation (To detail system development & testing approach.)
-- Project Performance & Validation (To prove project objectives are met.)
-- Project Conclusions: Findings & Recommendation
-- Appendix of report: Project Proposal
-- Appendix of report: Mapped System Functionalities against knowledge, techniques and skills of modular courses: MR, RS, CGS
-- Appendix of report: Installation and User Guide
-- Appendix of report: 1-2 pages individual project report per project member, including: Individual reflection of project journey: (1) personal contribution to group project (2) what learnt is most useful for you (3) how you can apply the knowledge and skills in other situations or your workplaces
-- Appendix of report: List of Abbreviations (if applicable)
-- Appendix of report: References (if applicable)
-
----
-## SECTION 7 : MISCELLANEOUS
-
-`Refer to Github Folder: Miscellaneous`
-
-### HDB_BTO_SURVEY.xlsx
-* Results of survey
-* Insights derived, which were subsequently used in our system
-
----
-
-### <<<<<<<<<<<<<<<<<<<< End of Template >>>>>>>>>>>>>>>>>>>>
-
----
-
-**This [Machine Reasoning (MR)](https://www.iss.nus.edu.sg/executive-education/course/detail/machine-reasoning "Machine Reasoning") course is part of the Analytics and Intelligent Systems and Graduate Certificate in [Intelligent Reasoning Systems (IRS)](https://www.iss.nus.edu.sg/stackable-certificate-programmes/intelligent-systems "Intelligent Reasoning Systems") series offered by [NUS-ISS](https://www.iss.nus.edu.sg "Institute of Systems Science, National University of Singapore").**
-
-**Lecturer: [GU Zhan (Sam)](https://www.iss.nus.edu.sg/about-us/staff/detail/201/GU%20Zhan "GU Zhan (Sam)")**
-
-[![alt text](https://www.iss.nus.edu.sg/images/default-source/About-Us/7.6.1-teaching-staff/sam-website.tmb-.png "Let's check Sam' profile page")](https://www.iss.nus.edu.sg/about-us/staff/detail/201/GU%20Zhan)
-
-**zhan.gu@nus.edu.sg**
+最终提交包含可运行系统、项目报告、5 分钟技术视频与 5 分钟宣传视频。视频链接和成员贡献信息由团队在完成后填写，当前没有发布链接。

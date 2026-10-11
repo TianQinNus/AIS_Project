@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import sqlite3
+from datetime import date, timedelta
+from unittest.mock import patch
 from types import SimpleNamespace
 import unittest
 
@@ -54,13 +57,22 @@ class RetrievalTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.encoder = Encoder()
-        self.index = self.root / "index.npz"
+        self.index = self.root / "knowledge.sqlite3"
         self.entries = []
 
     def add(self, name, content, kind="maintenance"):
         (self.root / name).write_text(content, encoding="utf-8")
         self.entries.append({"source": name, "title": name, "kind": kind,
-                             "version": "test", "reviewed": True, "applicability": "test only"})
+                             "version": "test", "reviewed": True, "applicability": "test only",
+                             "status": "active", "sha256": hashlib.sha256(content.encode()).hexdigest(),
+                             "publisher": "DVSA" if kind != "project" else "Test project",
+                             "authority": "government" if kind != "project" else "project",
+                             "evidence_type": "official_original" if kind != "project" else "project_policy",
+                             "source_url": "https://www.gov.uk/test", "original_source": name,
+                             "original_sha256": hashlib.sha256(content.encode()).hexdigest(),
+                             "jurisdiction": "GB" if kind != "policy" else "SG",
+                             "verified_on": date.today().isoformat(),
+                             "review_due": (date.today()+timedelta(days=30)).isoformat()})
         (self.root / "catalog.json").write_text(json.dumps(self.entries), encoding="utf-8")
 
     def make(self):
@@ -79,20 +91,59 @@ class RetrievalTests(unittest.TestCase):
         self.add("brakes.md", "Brake air leaks")
         self.assertEqual(self.make().search("pineapple astronomy violin")["hits"], [])
 
-    def test_modified_document_requires_rebuild(self):
+    def test_query_uses_database_only_when_sources_deleted(self):
         self.add("brakes.md", "Brake air leaks")
         retriever = self.make()
-        (self.root / "brakes.md").write_text("Changed brakes", encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "changed"):
-            retriever.search("brakes")
+        (self.root / "brakes.md").unlink()
+        (self.root / "catalog.json").unlink()
+        with patch("urllib.request.urlopen", side_effect=AssertionError("network forbidden")):
+            self.assertTrue(retriever.search("brake air leaks")["hits"])
 
-    def test_changed_catalog_requires_rebuild(self):
+    def test_build_rejects_changed_source_hash(self):
+        self.add("brakes.md", "Brake air leaks")
+        (self.root / "brakes.md").write_text("Changed brakes")
+        with self.assertRaisesRegex(ValueError, "hash changed"):
+            self.make()
+
+    def test_database_detects_vector_corruption(self):
+        self.add("brakes.md", "Brake air leaks")
+        self.make()
+        with sqlite3.connect(self.index) as db:
+            db.execute("UPDATE kb_chunks SET vector=zeroblob(length(vector))")
+        with self.assertRaisesRegex(ValueError, "integrity"):
+            KnowledgeRetriever(self.root, self.index, encoder=self.encoder)
+
+    def test_active_revision_refreshes_without_restarting(self):
         self.add("brakes.md", "Brake air leaks")
         retriever = self.make()
-        self.entries[0]["version"] = "changed"
-        (self.root / "catalog.json").write_text(json.dumps(self.entries))
-        with self.assertRaisesRegex(ValueError, "changed"):
-            retriever.search("brakes")
+        old = retriever.version
+        self.add("tyres.md", "Tyres wheel fixing")
+        build_index(self.root, self.index, "test-encoder", encoder=self.encoder)
+        self.assertEqual(retriever.search("tyres wheel fixing")["hits"][0]["source"], "tyres.md")
+        self.assertNotEqual(old, retriever.version)
+
+    def test_expired_source_is_excluded_at_query_time(self):
+        self.add("policy.md", "Goods vehicle annual inspection", "policy")
+        retriever = self.make()
+        class FutureDate(date):
+            @classmethod
+            def today(cls):
+                return date.today()+timedelta(days=60)
+        with patch("knowledge_rag.date", FutureDate):
+            self.assertEqual(retriever.search("goods vehicle annual inspection")["hits"], [])
+
+    def test_policy_jurisdiction_filter(self):
+        self.add("policy.md", "Goods vehicle annual inspection", "policy")
+        retriever = self.make()
+        self.assertTrue(retriever.search("goods vehicle annual inspection",kind="policy")["hits"])
+        self.assertEqual(retriever.search("goods vehicle annual inspection",kind="policy",jurisdiction="GB")["hits"], [])
+
+    def test_untrusted_publisher_rejected(self):
+        self.add("brakes.md", "Brake air leaks")
+        self.entries[0]["source_url"] = "https://example.com/manual"
+        (self.root/"catalog.json").write_text(json.dumps(self.entries))
+        with self.assertRaisesRegex(ValueError, "trusted"):
+            self.make()
 
     def test_path_traversal_rejected(self):
         self.add("brakes.md", "Brake air leaks")

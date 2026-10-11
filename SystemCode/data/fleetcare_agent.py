@@ -48,7 +48,14 @@ applicability: generic UK checks or an Australian guide are not Singapore regula
 and do not set vehicle-specific service intervals. Never invent torque, oil grade,
 part numbers, thresholds, replacement intervals, or proof that a part has failed.
 Generic checks are conditional reference information, not diagnosed vehicle faults.
-Distinguish public-source summaries from project-authored workflow suggestions.
+Knowledge retrieval is exclusively local SQLite; do not browse or invent web evidence.
+Evidence is an archived primary-source snapshot, not proof of current law or a diagnosis.
+State publisher, jurisdiction and snapshot date for policy/maintenance claims.
+Only kind=policy with jurisdiction=SG may support Singapore statutory obligations.
+UK maintenance guidance remains UK guidance even if its text says "by law".
+Do not determine inspection deadlines without verified vehicle type and registration age.
+Expired policies are excluded by retrieval; never substitute recalled laws.
+Project policy describes this prototype only, not an official maintenance standard.
 For specific repairs ask for verified vehicle/engine identity, symptoms, fault codes
 and the applicable OEM manual. Do not use RAG to override the deterministic action.
 Do not describe retrieval similarity as certainty or model confidence.
@@ -94,13 +101,13 @@ class FleetCareAssistant:
             if self.retriever is None:
                 self.retriever = KnowledgeRetriever(
                     Path(os.getenv("FLEETCARE_KNOWLEDGE_DIR", str(BASE_DIR / "knowledge"))),
-                    Path(os.getenv("FLEETCARE_KNOWLEDGE_INDEX", str(BASE_DIR / "knowledge_index" / "index.npz"))),
+                    Path(os.getenv("FLEETCARE_KNOWLEDGE_DB", os.getenv("FLEETCARE_KNOWLEDGE_INDEX", str(BASE_DIR / "knowledge_index" / "fleetcare_knowledge.sqlite3")))),
                     min_similarity=float(os.getenv("RAG_MIN_SIMILARITY", "0.32")))
             return self.retriever.search(query, context=context, top_k=5)
         except Exception as exc:
             # No connection strings or local error details are sent to the model.
             LOGGER.warning("Knowledge retrieval failed (%s)", type(exc).__name__)
-            return {"success": False, "hits": [], "error": "Knowledge retrieval unavailable. Check the index, source files and local embedding model."}
+            return {"success": False, "hits": [], "error": "Knowledge retrieval unavailable. Check the local SQLite database and cached embedding model."}
 
     def _vehicle(self, vehicle_id):
         if isinstance(vehicle_id, bool) or not isinstance(vehicle_id, int):
@@ -232,6 +239,7 @@ def ask_fleetcare(question: str, vehicle_id=None):
             location = (f"p.{hit['page']}" if "page" in hit else
                         hit.get("section", f"body block {hit.get('body_block', 1)}"))
             answer += f"\n- [{hit['citation_id']}] {hit['title']}，{location}，{hit['source']}"
+            answer += f"，发布者：{hit.get('publisher', 'unknown')}，适用地区：{hit.get('jurisdiction', 'unknown')}，核验日期：{hit.get('verified_on', 'unknown')}"
             if hit.get("source_url"):
                 answer += f"\n  {hit['source_url']}"
     if result["retrieval_warnings"]:

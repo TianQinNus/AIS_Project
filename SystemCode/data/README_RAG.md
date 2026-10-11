@@ -1,161 +1,91 @@
-# FleetCare 文档 RAG 实施说明
+# FleetCare RAG v2：官方原文与本地向量数据库
 
-基线：本地 `model` 分支，提交 `339c8b2297e181919853366a99ea518198f3abde`（feat: rag exploration）。本目录包含文档 RAG 的实现、知识来源和运行说明。
+更新：2026-10-11。网页团队请优先阅读 [README_RAG_WEB.md](README_RAG_WEB.md)，最新交接见 [RAG_PROGRESS.md](RAG_PROGRESS.md)。新增 HTTP 适配器与可分发 SQLite 种子库；本文说明核心知识构建与维护。
 
-## 1. 项目理解与当前接入点
+知识检索只访问你自己的本地 SQLite 数据库；车辆模型结果继续读取你配置的 MySQL。生成综合回答仍调用 OpenAI API，检索到的片段和车辆记录会作为上下文发送给模型。这不是完全离线的问答系统。
 
-FleetCare 用匿名 Scania Component X 运行读数和车辆规格预测 C0–C4。`fleetcare_inference.py` 的 `FleetCarePredictor` 加载历史 XGBoost 工件、生成历史特征、计算四个风险分数及车队分位数，再由 `temporal_rule_engine` 生成 action、priority、rule_id、evidence 和 reason。`run_model.py` 调用推理并写入 MySQL 的 `analysis` 与 `prediction_shap`。
+## 当前有效来源
 
-`rag.py` 当前只查询最新车辆分析、最近5条已存分析记录和 SHAP，并没有文档检索。`fleetcare_agent.py` 使用 Responses API 调用这个工具，目前只处理一轮工具结果；若第二次响应继续请求工具，现有代码可能没有最终文本。
+- DVSA：英国 HGV daily walkaround checks 官方原文。
+- HSE：英国车辆 inspection, maintenance and repair 官方原文。
+- LTA Singapore：Periodic Vehicle Inspection 与 Commercial Vehicles 官方原文。
+- FleetCare 项目规则说明：单独标识 project_policy，仅说明项目代码，不是官方维修标准。
 
-当前分支没有 `fleetcare_model.py`，`SystemCode/model/artifacts/model.py` 和 `SystemCode/clips/app.py` 都是空文件；因此本次不在这些文件中修改模型。根目录 README 仍是旧 BTO 模板，不代表 FleetCare 实现。
+`knowledge/catalog.json` 是有效目录。旧 `knowledge/maintenance/*.md`、交接建议与原有 dataset PDF 保留供历史参考，但不进入 v2 检索库。它们不能作为已核验的 OEM 维修手册。当前知识覆盖通用检查和官方政策，没有车型专属的拆装、扭矩、零件和维修工序。
 
-一个需要保留的区别：`analysis.prediction_at` 是模型运行批次时间，写入方式为 append；同一批读数重跑也可能形成多个记录。数据库最近5条分析不是必然来自5次独立运行读数。RAG 解释会明确这个限制。
+官方完整 HTML 位于 `knowledge/official/raw/`；确定性提取的段落和表格行位于 `knowledge/official/extracted/`。提取过程不使用 LLM、不改写或翻译原文；表格行重复其原文表头。所有来源带发布机构、URL、司法地区、获取/核验日期、审核期限、适用范围和 SHA-256。`reviewed=true` 只指来源身份、提取结构的检查，不表示专家签署或保证所有内容永远正确。哈希能检测修改，不能证明内容正确。
 
-## 2. 最终流程
+## 安装与首次建立
 
-```mermaid
-flowchart TD
-  Q[用户问题与可选 vehicle_id] --> D[先检索文档]
-  Q --> V[查询 analysis 与 prediction_shap]
-  V --> A[车辆事实与既有规则动作]
-  A --> R[结合状态与动作补充文档检索]
-  D --> L[LLM 综合解释]
-  R --> L
-  A --> L
-  L --> O[回答、车辆结构化结果、引用来源与检索状态]
-```
-
-数值和动作从数据库获取。文档负责解释规则含义、提供通用检查参考和支持资料入口。语言模型不重新预测或计算规则，也不把匿名特征解释成具体机械故障。
-
-## 3. 文件修改
-
-| 文件 | 用途 |
-|---|---|
-| `SystemCode/data/fleetcare_agent.py` | 替换。文档预检索、车辆查询后补充检索、多轮工具循环、字符串接口兼容、结构化结果及引用校验 |
-| `SystemCode/data/rag.py` | 替换。保留原 SQL 字段，补充相同时间记录的稳定排序、NULL 布尔/SHAP 处理、输入验证及时间/风险含义 |
-| `SystemCode/data/knowledge_rag.py` | 新增。PDF/DOCX/MD/TXT 读取、按 embedding token 上限切块、语义与 BM25 混合检索、来源位置、索引更新检查 |
-| `SystemCode/data/build_knowledge.py` | 新增。离线建索引，索引原子保存为一个 NPZ，避免文本与向量版本错配 |
-| `SystemCode/data/knowledge/` | 6份公开来源摘要、2份项目政策文档及2份现有数据集 PDF，共10份知识文档 |
-| `SystemCode/data/knowledge/catalog.json` | 来源类型、标题、版本、适用范围、原始链接及核查级别 |
-| `SystemCode/requirements-rag.txt` | RAG 所需依赖，与现有模型 requirements 分开 |
-| `SystemCode/data/tests/` | 21项离线测试及14条真实检索验收问题 |
-| `SystemCode/data/evaluate_knowledge.py` | 在实际 embedding 模型上执行检索验收 |
-
-本版本采用本地多语言 embedding + NumPy 余弦检索 + BM25 排名融合。当前知识库很小，不需要额外向量服务。中英文语义检索由 embedding 提供，Risk6、TR1 等术语由关键词排序补充。embedding 采用 [Sentence Transformers 的语义相似度流程](https://sbert.net/docs/sentence_transformer/usage/semantic_textual_similarity.html)；默认模型为 [paraphrase-multilingual-MiniLM-L12-v2](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2)。
-
-该 embedding 模型上下文较短，所以按 tokenizer 与模型实际 max_seq_length 切分，避免直接使用1000字符切块而静默丢失后半段。PDF 保留页码，Markdown 保留标题与起始行，DOCX 保留正文块位置并读取表格。扫描件或 PDF 空白/不可提取页会阻止建索引，需先 OCR、人工整理或从 catalog 排除不承载内容的页面版本。
-
-Responses API 按 [官方 function calling 指南](https://developers.openai.com/api/docs/guides/function-calling) 处理每个 function_call，用对应 call_id 返回结果，并循环到最终文本；每轮重新传入系统 instructions。最后一轮关闭工具调用，防止无界循环。
-
-## 4. 获取代码和安装依赖
+在仓库 `SystemCode` 下：
 
 ```bash
-git clone --branch model --single-branch https://github.com/TianQinNus/AIS_Project.git
-cd AIS_Project/SystemCode
 python -m pip install -r requirements-rag.txt
-# 如果现有环境尚未安装模型基础依赖：
-python -m pip install -r requirements.txt
-```
-
-使用 Python 3.10+，建议在已有 FleetCare Python 环境中安装。这里只补充 RAG 依赖，不负责重新安装或训练现有预测模型的完整环境。以下命令默认从 `SystemCode` 目录开始。
-
-## 5. 构建索引与配置
-
-```bash
 cd data
 python build_knowledge.py
+python evaluate_knowledge.py
+python -m pip install -r ../requirements-rag-web.txt
+python -m unittest discover -s tests -v
+```
 
-# 先测试检索，不调用 LLM、不连接 MySQL：
-python knowledge_rag.py "出车前应该检查哪些警告灯？" --kind maintenance
-python knowledge_rag.py "TR1为什么对应PRIORITY_INSPECT？" --kind project
+当前机器已存在本地嵌入模型缓存，已经建立数据库。若另一台机器尚无缓存，只在建库阶段明确允许下载：
+
+```bash
+python build_knowledge.py --allow-model-download
+```
+
+默认模型是 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`，384 维。查询阶段固定 `local_files_only=True`；模型缺失时报告错误，不自动联网下载。CPU 上运行。可用 `RAG_EMBEDDING_MODEL` 在建库时指定预先下载的本地模型目录；查询时读取数据库中的该路径，部署时路径必须有效。
+
+## 查询
+
+无需 OpenAI/MySQL 密钥即可验证知识检索：
+
+```bash
+python knowledge_rag.py '新加坡超过10年的货车多久需要定期车辆检验？' --kind policy
+python knowledge_rag.py '气压建立异常和制动管路漏气应检查什么？' --kind maintenance
+```
+
+检索不会读外部文档、catalog，也不会搜索网页。数据库包含原文快照，因此原始文件目录被移走后仍可查询。原文件修改不会即时改变已发布数据库，需核验并重新建库。数据库只读打开；缺失时不会悄悄创建空库。使用 NumPy 计算本地向量余弦相似度，结合 BM25 和排序融合；不是服务器服务或 ANN 引擎，适合此小型知识库。中文词汇映射仅帮助查找英文原文，不增加政策事实。
+
+综合模型结果与知识回答：先按 `.env.rag.example` 将真实凭据 export 到环境，然后：
+
+```python
+from fleetcare_agent import ask_fleetcare, ask_fleetcare_detailed
+print(ask_fleetcare('车辆目前为什么需要检查？请结合官方资料说明下一步检查参考。', vehicle_id=实际车辆ID))
+result = ask_fleetcare_detailed('新加坡货车的定期检验政策是什么？')
+# result['sources'] 含原文片段、出处、地区、核验日期和引用ID。
+```
+
+`实际车辆ID` 请换成数据库中存在的整数。Python 示例不是可直接运行的占位变量定义。网页/应用现有调用接口无需改变。默认知识库是 `data/knowledge_index/fleetcare_knowledge.sqlite3`，可通过 `FLEETCARE_KNOWLEDGE_DB` 指定绝对路径。遗留 `FLEETCARE_KNOWLEDGE_INDEX` 如指向 index.npz，请 unset 或改为 sqlite3 路径。NPZ 不再用于问答；不自动导入旧摘要。
+
+## 维护来源与政策
+
+只在维护时联网：
+
+```bash
+python fetch_official_sources.py
+# 检查 raw、extracted 和 catalog 的变更后
+python build_knowledge.py
 python evaluate_knowledge.py
 ```
 
-首次建索引会从 Hugging Face 下载 embedding 模型，需要联网和足够磁盘空间；已有缓存时可本地运行。文档向量化在本地完成。完整问答继续使用现有 OpenAI API，所选车辆记录与检索片段会作为上下文发送给 API。代码没有在本次交付中发出实际问答请求。
+抓取仅针对代码中的固定官方 HTTPS 页面，拒绝异域跳转、缺失正文与不符预期的页面。抓取命令刷新快照但不会改变问答使用的数据库，建库才发布新版本。若网站版式变化，需要人工检查提取选择器。
 
-`RAG_MIN_SIMILARITY=0.32` 是初始候选值，未经本项目语料校准。应在验收问题及更多无答案问题上调节，观察漏检和错误召回，不把相似度当作置信度。修改文档、catalog 或 embedding 模型后重新建索引并重启服务；每次检索会检查知识指纹，防止已修改内容仍使用旧索引。
+政策每 90 天、维护指导每 365 天安排重新审核；这是项目审核期限，不是法律规定或官方有效期。查询时超过审核期限的来源自动排除，不联网补齐。即使未到期限，法规也可能变化，因此新政策变更后应主动刷新，避免把快照称为实时法规。政策查询默认 SG；英国指导不会被当作新加坡法律。法律适用还需确认车型、注册车龄、重量等真实资料，模型风险类别不能决定法定检验周期。
 
-```bash
-export OPENAI_API_KEY="你的API密钥"
-# 保留原代码默认模型；若账户无法访问，填写你们已验证可用的模型 ID。
-export FLEETCARE_LLM_MODEL="gpt-5.6"
-export FLEETCARE_DB_HOST="127.0.0.1"
-export FLEETCARE_DB_PORT="3306"
-export FLEETCARE_DB_USER="root"
-export FLEETCARE_DB_PASSWORD="你的数据库密码"
-export FLEETCARE_DB_NAME="fleetcareai"
+新增 OEM 手册需取得合法原文、准确车型/版本/适用范围与来源凭据，在可信发布者允许列表和 catalog 中注册。未核验文档不能直接丢进目录就进入检索。现在的 Component X 匿名数据无法确定零件身份，不能据此生成具体维修工序。
 
-python fleetcare_agent.py
-```
+## 数据结构与版本
 
-如果已经在 `data` 目录，不需要再次执行 `cd data`。
+- `kb_versions`：模型名、维数、来源目录摘要和版本元数据。
+- `kb_documents`：来源元数据、提取文本文件和原文快照 BLOB。
+- `kb_chunks`：知识片段、向量 float32 BLOB、文本/向量 SHA-256。
+- `kb_state`：当前生效版本。
 
-`.env.rag.example` 仅作变量说明，程序不会自动读取它。不要提交实际密钥。不要把 `knowledge_index/` 或下载模型缓存提交到 Git。
+建库在 SQLite 事务中发布，旧版本保留；失败不切换有效版本。检索器检测有效版本变化并加载新版本。载入校验数据库内的来源、目录、片段与向量完整性，拒绝损坏数据。一次查询使用一个已加载的完整版本。
 
-## 6. 调用接口
+SQLite 与 MySQL 由 agent 汇总：MySQL 提供预测/规则/SHAP，SQLite 提供原文证据。这是两个各司其职的本地存储，不是将关系表和向量物理合并为一个 MySQL 数据库。
 
-原接口仍返回字符串：
+## 验证范围
 
-```python
-from fleetcare_agent import ask_fleetcare
-
-answer = ask_fleetcare("1492号车为什么需要检查？检查前应该准备什么？")
-print(answer)
-```
-
-对于车辆详情页面，应显式传入已选择的 vehicle_id，保证后台先取到该车辆记录：
-
-```python
-from fleetcare_agent import ask_fleetcare_detailed
-
-result = ask_fleetcare_detailed(
-    "解释这辆车的风险和动作，并结合维修知识列出检查参考与信息缺口。",
-    vehicle_id=1492,
-)
-
-print(result["answer"])
-print(result["vehicle_analysis"])
-print(result["sources"])
-print(result["retrieval_warnings"])
-```
-
-返回的 `sources` 含实际片段、来源文档、原始 URL、类型、适用范围、位置、检索分数和 `cited_in_answer`，可用于前端展开查看原始证据。`retrieval_trace` 可用于检查每次检索命中了哪些文档。回答引用格式为 `[DB:analysis_id]` 和 `[K-xxxxxxxxxxxx]`。
-
-引用 ID 在服务器端核验，**这只验证引用存在，不证明每一句话都被引用内容支持**；应在上线前人工检查生成回答的事实一致性。代码没有实现严格语义蕴涵验证或数值逐句校验。
-
-`ask_fleetcare` 每次问题独立，不保存多轮聊天记忆。页面连续提问应每次传入已选 vehicle_id；不要只发“那它呢”却丢失选中车辆。
-
-## 7. 知识手册内容和来源
-
-公开摘要是本次基于官方资料改写的参考材料，未复刻整份商业手册。`reviewed=true` 仅表示已核对文本来源，`expert_validated=false` 明确没有维修专家认证。
-
-- 日常检查、制动与轮胎、缺陷报告：[DVSA HGV walkaround checks](https://www.gov.uk/guidance/carry-out-daily-heavy-goods-vehicle-hgv-walkaround-checks)。英国参考，不作为新加坡法规。
-- 定期维护和人员培训：[HSE Inspection, maintenance and repair](https://www.hse.gov.uk/workplacetransport/vehicles/inspection.htm)。通用工作场所运输参考。
-- 工况与保养计划适用范围：[Scania Australia October 2020 指南](https://www.scania.com/content/dam/scanianoe/market/au/products-and-services/services/ScaniaPreventativeMaintenanceGuides_A3_October2020_FINAL.pdf)。历史地区性资料，本包不采用其具体里程/小时/油品参数。
-- 实际维修资料入口：[Scania RMI](https://www.scania.com/group/en/home/products-and-services/services/rmi.html)。只说明入口，没有获取账户内的专用规程。
-
-两份 dataset PDF 保留为 `kind=dataset`。`fleetcare_policy.md` 与 `inspection_handoff.md` 属于 `kind=project`；交接流程是本次设计的项目建议，不能冒充厂商维修规定。
-
-这是一套可用于项目演示的基础维修知识库，覆盖通用检查和维护交接。因为真实车型、发动机及 Component X 身份未知，不能构建该匿名部件的实际拆装、维修或更换手册。未来应加入经过专家审阅、与实际车辆匹配的 OEM 材料，再做适用车型/发动机过滤。
-
-## 8. 验证与尚未验证的部分
-
-已运行21项离线测试，覆盖分块完整性、索引失效、来源位置、DOCX表格、中英文关键词、检索过滤、无相关文档、多轮和多工具调用、工具上限、车辆显式查询、失败降级、引用ID及跨请求证据隔离。10份文档都已检查可提取文本。
-
-离线测试使用确定性的测试 embedding 和模拟 Responses 客户端，**没有下载真实 embedding 模型，也没有连接你们的 MySQL 或调用真实 OpenAI API**。因此真实跨语言召回、MySQL兼容性、LLM数值一致性和最终回答质量需要在你们的运行环境执行上述命令验收。`evaluate_knowledge.py` 的14条问题尚未用真实模型执行，不能报告其通过率。
-
-建议人工验收以下问题：
-
-1. “1492号车为什么需要检查？哪些内容来自模型，哪些来自文档？”——数值/action/rule_id 与 DB 逐项一致，文档建议有引用且不推断部件。
-2. “不存在的车辆有什么故障？”——说明缺少车辆记录，不编造。
-3. “Risk6=0.7是否说明70%概率在6天内故障？”——说明模型分数与运行时间单位的实际含义。
-4. “高SHAP的变量代表哪个零件坏了？”——说明匿名化和解释边界。
-5. “这辆车需要更换水泵吗？”——仅凭匿名预测无法确定，需要实际症状、车辆身份及对应手册。
-6. 删除索引或停止 DB 后提问——明确哪类证据不可用，不补造信息。
-
-## 9. 后续数据接口改进
-
-当前数据库没有持久化完整 Risk48/Risk24/Risk12 原始分数和运行观察时刻，所以本次不假装可以回答这些数值。建议后续单独迁移：在 analysis 中保存 observation_time_step、model_version、prediction_batch_id，及所有风险分数；历史查询按真实 observation_time_step 排序，并对同一车辆/观察时刻明确去重策略。
-
-那项迁移需要查看真实 MySQL DDL，并同步修改 `_build_analysis_dataframe`、写入逻辑和查询接口。本次 RAG 补丁不包含未经验证的 DDL，现有 schema 可以继续使用。
+单元测试覆盖原文修改拒绝、数据库损坏、版本切换、过期和地区筛选、删除外部文档后查询、工具编排和引用 ID。`evaluate_knowledge.py` 使用真实嵌入模型，检查命中来源及部分关键表格行。它不能证明 LLM 回答没有幻觉，也不能验证具体维修适用性。没有真实 API/MySQL 凭据的运行环境不进行线上综合回答验证。

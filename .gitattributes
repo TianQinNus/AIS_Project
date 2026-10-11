@@ -1,0 +1,7 @@
+
+# Provenance SHA-256 uses exact archived bytes; prevent checkout EOL conversion.
+SystemCode/data/knowledge/official/raw/*.html -text whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab,cr-at-eol
+SystemCode/data/knowledge/official/extracted/*.json -text
+SystemCode/data/knowledge/catalog.json -text
+SystemCode/data/knowledge/project/fleetcare_policy.md -text
+SystemCode/data/knowledge_seed/*.sqlite3 binary

@@ -1,0 +1,5 @@
+-r requirements-rag.txt
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+# TestClient contract tests only; not used for RAG retrieval.
+httpx>=0.27,<1

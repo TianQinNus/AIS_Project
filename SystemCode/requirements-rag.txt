@@ -7,3 +7,6 @@ pypdf>=5,<7
 python-docx>=1.1,<2
 sentence-transformers>=3,<6
 numpy>=1.26,<3
+
+# Used only by the explicit official-source refresh command
+beautifulsoup4>=4.12,<5

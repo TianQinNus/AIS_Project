@@ -1,3 +1,13 @@
+=== 最新 RAG 进度：2026-10-11 ===
+有效知识：4 份官方原文+1 份项目规则，273 个知识片段，384 维。
+存储：本地 SQLite，替代 NPZ；原文、向量、来源与版本一体保存。
+网页接入：rag_http_api.py，POST /api/rag/ask 与 POST /api/rag/search。
+maintenance：通用日常检查、缺陷报告、维护计划与安全参考；非部件故障诊断或 OEM 拆装手册。
+完整接入说明：README_RAG_WEB.md；完整进度：RAG_PROGRESS.md。
+验证：32 项单元测试、13 条真实检索用例；真实 OpenAI/MySQL 综合问答待团队联调。
+
+=== 以下为原有模型开发与评估记录（保留）===
+
 ① Baseline
 Random Forest / Temporal XGBoost
         ↓
