@@ -95,7 +95,7 @@
     "source": "project/fleetcare_policy.md",
     "title": "FleetCare prototype model boundaries",
     "kind": "project",
-    "version": "Project policy v2",
+    "version": "Project policy v3 PostgreSQL",
     "reviewed": true,
     "expert_validated": false,
     "authority": "project",
@@ -104,8 +104,8 @@
     "jurisdiction": "GLOBAL",
     "status": "active",
     "applicability": "Prototype only; not a government or OEM standard.",
-    "verified_on": "2026-10-08",
-    "review_due": "2027-10-08",
-    "sha256": "f61fd647e87b6ff52c9d03c889d775328156a462a45ec95db83e0030d79bfbdd"
+    "verified_on": "2026-10-12",
+    "review_due": "2027-10-12",
+    "sha256": "f0973e31985f2f23f9fd950a4ed63f8e6ac68784af98226fe54243580415c965"
   }
 ]

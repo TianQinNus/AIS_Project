@@ -4,7 +4,8 @@ import json
 from pathlib import Path
 import sys
 import tempfile
-import sqlite3
+import os
+from sqlalchemy import text
 from datetime import date, timedelta
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -13,9 +14,47 @@ import unittest
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from database import create_postgres_engine
+from pg_knowledge_store import initialize
 from fleetcare_agent import FleetCareAssistant
 from knowledge_rag import KnowledgeRetriever, build_index, document_units, tokens
 
+
+class DatabaseConfigTests(unittest.TestCase):
+    def test_default_configuration_is_postgres(self):
+        with patch.dict(os.environ,{},clear=True):
+            engine=create_postgres_engine()
+        self.addCleanup(engine.dispose)
+        self.assertEqual(engine.url.drivername,"postgresql+psycopg")
+        self.assertEqual(engine.url.port,5432)
+
+    def test_rejects_other_database_backends(self):
+        with self.assertRaisesRegex(ValueError,"PostgreSQL URL"):
+            create_postgres_engine(database_url="mysql://user:secret@localhost/db")
+
+    def test_url_override_and_password_escaping(self):
+        with patch.dict(os.environ,{"FLEETCARE_DATABASE_URL":"postgresql://user:p%40ss@localhost:5544/project"}):
+            engine=create_postgres_engine()
+        self.addCleanup(engine.dispose)
+        self.assertEqual(engine.url.database,"project")
+        self.assertEqual(engine.url.password,"p@ss")
+        self.assertEqual(engine.url.drivername,"postgresql+psycopg")
+
+class SetupCheckTests(unittest.TestCase):
+    def test_failure_is_redacted(self):
+        from check_rag_setup import check_setup
+        with patch("check_rag_setup.create_postgres_engine",side_effect=RuntimeError("private-password")):
+            report=check_setup()
+        self.assertFalse(report["ready_for_search"])
+        self.assertNotIn("private-password",json.dumps(report))
+
+    def test_llm_configuration_is_not_claimed_as_verified(self):
+        from check_rag_setup import check_setup
+        with patch.dict(os.environ,{"OPENAI_API_KEY":"private-test-key","FLEETCARE_LLM_MODEL":"test"}), patch("check_rag_setup.create_postgres_engine",side_effect=RuntimeError()):
+            report=check_setup()
+        self.assertTrue(report["llm_environment_configured"])
+        self.assertFalse(report["live_llm_tested"])
+        self.assertNotIn("private-test-key",json.dumps(report))
 
 class Tokenizer:
     def __init__(self):
@@ -43,21 +82,33 @@ class Encoder:
         self.tokenizer = Tokenizer()
 
     def encode(self, texts, **kwargs):
-        result = np.zeros((len(texts), 256), dtype=np.float32)
+        result = np.zeros((len(texts), 384), dtype=np.float32)
         for i, text in enumerate(texts):
             for word in tokens(text):
-                index = int(hashlib.sha256(word.encode()).hexdigest()[:8], 16) % 256
+                index = int(hashlib.sha256(word.encode()).hexdigest()[:8], 16) % 384
                 result[i, index] += 1
         return result
 
 
+@unittest.skipUnless(os.getenv("FLEETCARE_TEST_DATABASE_URL"), "Set an isolated FLEETCARE_TEST_DATABASE_URL for pgvector tests")
 class RetrievalTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.engine = create_postgres_engine(database_url=os.environ["FLEETCARE_TEST_DATABASE_URL"])
+        initialize(cls.engine)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.engine.dispose()
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         self.encoder = Encoder()
-        self.index = self.root / "knowledge.sqlite3"
+        # This test URL must point to a disposable test database, never production.
+        with self.engine.begin() as db:
+            db.execute(text("TRUNCATE rag.kb_versions CASCADE"))
         self.entries = []
 
     def add(self, name, content, kind="maintenance"):
@@ -76,8 +127,58 @@ class RetrievalTests(unittest.TestCase):
         (self.root / "catalog.json").write_text(json.dumps(self.entries), encoding="utf-8")
 
     def make(self):
-        build_index(self.root, self.index, "test-encoder", encoder=self.encoder)
-        return KnowledgeRetriever(self.root, self.index, encoder=self.encoder, min_similarity=0.4)
+        build_index(self.root, "test-encoder", engine=self.engine, encoder=self.encoder)
+        return KnowledgeRetriever(engine=self.engine, encoder=self.encoder, min_similarity=0.4)
+
+    def test_setup_check_does_not_write_database(self):
+        from check_rag_setup import check_setup
+        from sqlalchemy import event
+        self.add("brakes.md","Brake air leaks")
+        self.make()
+        statements=[]
+        def capture(connection,cursor,statement,params,context,many):
+            statements.append(statement.strip().upper())
+        event.listen(self.engine,"before_cursor_execute",capture)
+        try:
+            report=check_setup(engine=self.engine,skip_model=True)
+        finally:
+            event.remove(self.engine,"before_cursor_execute",capture)
+        self.assertTrue(any(c["name"]=="knowledge_version" and c["passed"] for c in report["checks"]))
+        self.assertTrue(all(sql.startswith("SELECT") or sql.startswith("SET TRANSACTION READ ONLY") for sql in statements))
+
+    def test_pgvector_distance_matches_numpy_reference(self):
+        from knowledge_rag import normalized_encode
+        self.add("brakes.md", "Brake air leaks")
+        retriever = self.make()
+        query = normalized_encode(self.encoder,["brake leaks"])[0]
+        np.testing.assert_allclose(retriever._similarities(query),retriever.vectors @ query,atol=1e-6)
+
+    def test_pgvector_embedding_corruption_detected(self):
+        self.add("brakes.md", "Brake air leaks")
+        self.make()
+        with self.engine.begin() as db:
+            db.execute(text("UPDATE rag.kb_chunks SET embedding=CAST(:vector AS public.vector)"),
+                       {"vector":"[1,"+",".join(["0"]*383)+"]"})
+        with self.assertRaisesRegex(ValueError,"pgvector embedding integrity"):
+            KnowledgeRetriever(engine=self.engine,encoder=self.encoder)
+
+    def test_publication_rolls_back_on_insert_failure(self):
+        from sqlalchemy import event
+        self.add("brakes.md", "Brake air leaks")
+        retriever = self.make()
+        old = retriever.version
+        def fail(connection,cursor,statement,params,context,many):
+            if "INSERT INTO rag.kb_chunks" in statement:
+                raise RuntimeError("simulated insert failure")
+        event.listen(self.engine,"before_cursor_execute",fail)
+        try:
+            with self.assertRaisesRegex(RuntimeError,"simulated"):
+                build_index(self.root,"different-model-version",engine=self.engine,encoder=self.encoder)
+        finally:
+            event.remove(self.engine,"before_cursor_execute",fail)
+        with self.engine.connect() as db:
+            self.assertEqual(db.execute(text("SELECT active_version FROM rag.kb_state WHERE id=1")).scalar_one(),old)
+            self.assertEqual(db.execute(text("SELECT count(*) FROM rag.kb_versions")).scalar_one(),1)
 
     def test_retrieval_and_scope_filter(self):
         self.add("brakes.md", "# Brakes\nBrake air leaks require inspection.")
@@ -108,17 +209,17 @@ class RetrievalTests(unittest.TestCase):
     def test_database_detects_vector_corruption(self):
         self.add("brakes.md", "Brake air leaks")
         self.make()
-        with sqlite3.connect(self.index) as db:
-            db.execute("UPDATE kb_chunks SET vector=zeroblob(length(vector))")
+        with self.engine.begin() as db:
+            db.execute(text("UPDATE rag.kb_chunks SET vector_sha256='corrupt'"))
         with self.assertRaisesRegex(ValueError, "integrity"):
-            KnowledgeRetriever(self.root, self.index, encoder=self.encoder)
+            KnowledgeRetriever(engine=self.engine, encoder=self.encoder)
 
     def test_active_revision_refreshes_without_restarting(self):
         self.add("brakes.md", "Brake air leaks")
         retriever = self.make()
         old = retriever.version
         self.add("tyres.md", "Tyres wheel fixing")
-        build_index(self.root, self.index, "test-encoder", encoder=self.encoder)
+        build_index(self.root, "test-encoder", engine=self.engine, encoder=self.encoder)
         self.assertEqual(retriever.search("tyres wheel fixing")["hits"][0]["source"], "tyres.md")
         self.assertNotEqual(old, retriever.version)
 

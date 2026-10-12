@@ -8,3 +8,7 @@ __pycache__/
 .env.*
 !.env.rag.example
 /SystemCode/data/knowledge_index/
+
+# Local virtual environments and supplied private business-data dump
+.venv/
+/fleetcare_new.sql

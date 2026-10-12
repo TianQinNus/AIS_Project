@@ -3,11 +3,11 @@ import json
 import os
 from pathlib import Path
 
-from knowledge_rag import BASE_DIR, DEFAULT_DB, KnowledgeRetriever
+from knowledge_rag import BASE_DIR, KnowledgeRetriever
 
 
 if __name__ == "__main__":
-    retriever = KnowledgeRetriever(BASE_DIR / "knowledge", DEFAULT_DB,
+    retriever = KnowledgeRetriever(
                                    min_similarity=float(os.getenv("RAG_MIN_SIMILARITY", "0.32")))
     rows = []
     for line in (BASE_DIR / "tests" / "retrieval_cases.jsonl").read_text(encoding="utf-8").splitlines():

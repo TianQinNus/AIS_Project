@@ -21,4 +21,4 @@ TR5：C1，或高 Risk48 且有持续或恶化支持，返回 MONITOR。
 # SHAP 与已存历史的解释限制
 SHAP 描述匿名特征对预测的贡献，不能确定具体故障部件。
 analysis.prediction_at 是运行批次时间，现有接口查询的是最近数据库分析记录；重复运行相同读数也会追加记录。因此不能把多次存储记录直接当成独立运行读数或真实风险恶化。
-数据库当前没有持久化完整 Risk48、Risk24、Risk12 原始分数及所有运行时间信息。未提供的数值应说明缺失，不能由 LLM 编造。
+最新 PostgreSQL analysis 表已保存 Risk48、Risk24、Risk12、Risk6 原始模型分数及 time_step、history_count、rule_trace 等字段。应读取实际返回值；NULL 表示缺失，不得编造。time_step 是运行时间单位，不是日历日期；相同 time_step 的分析重跑不能视为独立车辆读数。

@@ -10,7 +10,9 @@ import math
 import os
 from pathlib import Path
 import re
-import sqlite3
+from sqlalchemy import text as sql_text
+from database import create_postgres_engine
+from pg_knowledge_store import json_value, publish
 from urllib.parse import urlparse
 from datetime import date
 
@@ -18,7 +20,7 @@ import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_MODEL = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-DEFAULT_DB = BASE_DIR / "knowledge_index" / "fleetcare_knowledge.sqlite3"
+EMBEDDING_DIMENSION = 384
 KINDS = {"maintenance", "policy", "project", "dataset"}
 TRUSTED_HOSTS = {"government": {"www.gov.uk", "www.hse.gov.uk", "onemotoring.lta.gov.sg"},
                  "research": {"arxiv.org", "www.nature.com", "pmc.ncbi.nlm.nih.gov"},
@@ -162,10 +164,9 @@ def normalized_encode(encoder, texts):
     return vectors / norms
 
 
-def build_index(root, index_path, model_name=DEFAULT_MODEL, *, encoder=None, allow_model_download=False):
-    root, index_path = Path(root), Path(index_path)
-    if index_path.suffix != ".sqlite3":
-        raise ValueError("Use a .sqlite3 database; legacy NPZ is not used for retrieval")
+def build_index(root, model_name=DEFAULT_MODEL, *, engine=None, encoder=None, allow_model_download=False):
+    root = Path(root)
+    engine = engine if engine is not None else create_postgres_engine()
     catalog = load_catalog(root)
     before = fingerprint(root, catalog)
     encoder = encoder if encoder is not None else load_encoder(model_name, local_only=not allow_model_download)
@@ -216,10 +217,9 @@ def build_index(root, index_path, model_name=DEFAULT_MODEL, *, encoder=None, all
     vectors = normalized_encode(encoder, [chunk["text"] for chunk in chunks])
     if fingerprint(root, load_catalog(root)) != before:
         raise ValueError("Knowledge changed during indexing; rebuild")
-    metadata = {"schema_version": 2, "model": model_name, "fingerprint": before,
+    metadata = {"schema_version": 3, "model": model_name, "fingerprint": before,
                 "created_at": datetime.now(timezone.utc).isoformat(), "chunk_token_budget": budget,
                 "dimension": int(vectors.shape[1]), "chunk_count": len(chunks), "catalog": catalog}
-    version = hashlib.sha256((before + model_name + json.dumps(chunks, sort_keys=True, ensure_ascii=False) + "v2.1").encode() + vectors.astype("<f4").tobytes()).hexdigest()
     archives = {}
     for entry in catalog:
         extracted = (root / entry["source"]).read_bytes()
@@ -228,45 +228,14 @@ def build_index(root, index_path, model_name=DEFAULT_MODEL, *, encoder=None, all
                 or hashlib.sha256(original).hexdigest() != entry.get("original_sha256", entry["sha256"])):
             raise ValueError("Source changed before database publication; rebuild")
         archives[entry["source"]] = (extracted, original)
-    index_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(index_path) as db:
-        db.execute("PRAGMA foreign_keys=ON")
-        db.executescript("""
-        CREATE TABLE IF NOT EXISTS kb_versions(version TEXT PRIMARY KEY, metadata TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS kb_documents(version TEXT REFERENCES kb_versions(version),
-          source TEXT, metadata TEXT NOT NULL, extracted BLOB NOT NULL, original BLOB NOT NULL,
-          PRIMARY KEY(version,source));
-        CREATE TABLE IF NOT EXISTS kb_chunks(version TEXT, ordinal INTEGER, source TEXT,
-          payload TEXT NOT NULL, vector BLOB NOT NULL, vector_sha256 TEXT NOT NULL,
-          text_sha256 TEXT NOT NULL, PRIMARY KEY(version,ordinal),
-          FOREIGN KEY(version,source) REFERENCES kb_documents(version,source));
-        CREATE TABLE IF NOT EXISTS kb_state(id INTEGER PRIMARY KEY CHECK(id=1),
-          active_version TEXT NOT NULL REFERENCES kb_versions(version));
-        """)
-        db.execute("BEGIN IMMEDIATE")
-        exists = db.execute("SELECT 1 FROM kb_versions WHERE version=?", (version,)).fetchone()
-        if not exists:
-            db.execute("INSERT INTO kb_versions VALUES (?,?)", (version, json.dumps(metadata, ensure_ascii=False)))
-            for entry in catalog:
-                db.execute("INSERT INTO kb_documents VALUES (?,?,?,?,?)",
-                           (version, entry["source"], json.dumps(entry, ensure_ascii=False),
-                            *archives[entry["source"]]))
-            for i, (chunk, vector) in enumerate(zip(chunks, vectors)):
-                blob = vector.astype("<f4").tobytes()
-                db.execute("INSERT INTO kb_chunks VALUES (?,?,?,?,?,?,?)",
-                           (version, i, chunk["source"], json.dumps(chunk, ensure_ascii=False), blob,
-                            hashlib.sha256(blob).hexdigest(), hashlib.sha256(chunk["text"].encode()).hexdigest()))
-        db.execute("INSERT INTO kb_state VALUES (1,?) ON CONFLICT(id) DO UPDATE SET active_version=excluded.active_version", (version,))
-    return {"documents": len(catalog), "chunks": len(chunks), "database": str(index_path),
+    version = publish(engine, metadata, chunks, vectors, archives)
+    return {"documents": len(catalog), "chunks": len(chunks), "backend": "postgresql_pgvector",
             "version": version, "model": model_name, "dimension": int(vectors.shape[1])}
 
 
 class KnowledgeRetriever:
-    def __init__(self, root, index_path, *, encoder=None, min_similarity=0.32):
-        self.root = Path(root)  # ingestion location only; never read during retrieval
-        self.database = Path(index_path).resolve()
-        if self.database.suffix != ".sqlite3":
-            raise ValueError("Legacy NPZ retrieval disabled; run build_knowledge.py to create SQLite")
+    def __init__(self, *, engine=None, encoder=None, min_similarity=0.32):
+        self.engine = engine if engine is not None else create_postgres_engine()
         self._load_database()
         self.encoder = encoder if encoder is not None else load_encoder(self.metadata["model"])
         self.min_similarity = float(min_similarity)
@@ -274,66 +243,80 @@ class KnowledgeRetriever:
             raise ValueError("min_similarity must be between -1 and 1")
         self._prepare_terms()
 
-    def _connect(self):
-        return sqlite3.connect(self.database.as_uri() + "?mode=ro", uri=True)
-
     def _load_database(self):
-        with self._connect() as db:
-            db.execute("BEGIN")
-            row = db.execute("SELECT active_version FROM kb_state WHERE id=1").fetchone()
-            if not row:
-                raise ValueError("Database has no active knowledge version")
-            self.version = row[0]
-            self.metadata = json.loads(db.execute("SELECT metadata FROM kb_versions WHERE version=?", (self.version,)).fetchone()[0])
-            if self.metadata.get("schema_version") != 2:
-                raise ValueError("Unsupported knowledge database schema")
-            documents = {}
-            for source, meta, extracted, original in db.execute("SELECT source,metadata,extracted,original FROM kb_documents WHERE version=?", (self.version,)):
-                entry = json.loads(meta)
-                if hashlib.sha256(extracted).hexdigest() != entry["sha256"] or hashlib.sha256(original).hexdigest() != entry.get("original_sha256", entry["sha256"]):
+        with self.engine.connect().execution_options(isolation_level="REPEATABLE READ") as db:
+            db.execute(sql_text("SET TRANSACTION READ ONLY"))
+            self.version = db.execute(sql_text("SELECT active_version FROM rag.kb_state WHERE id=1")).scalar()
+            if not self.version:
+                raise ValueError("No active PostgreSQL knowledge version; build or migrate first")
+            params = {"version": self.version}
+            self.metadata = json_value(db.execute(sql_text("SELECT metadata FROM rag.kb_versions WHERE version=:version"), params).scalar_one())
+            if self.metadata.get("schema_version") != 3 or self.metadata["dimension"] != 384:
+                raise ValueError("Unsupported pgvector knowledge schema or embedding dimension")
+            documents, archives = {}, {}
+            for source,meta,extracted,original in db.execute(sql_text("SELECT source,metadata,extracted,original FROM rag.kb_documents WHERE version=:version"),params):
+                entry = json_value(meta)
+                if hashlib.sha256(extracted).hexdigest() != entry["sha256"] or hashlib.sha256(original).hexdigest() != entry.get("original_sha256",entry["sha256"]):
                     raise ValueError("Database source hash mismatch")
                 documents[source] = entry
+                archives[source] = extracted
             catalog = self.metadata["catalog"]
-            if documents != {entry["source"]: entry for entry in catalog}:
-                raise ValueError("Database catalog does not match source provenance")
-            digest = hashlib.sha256(json.dumps(catalog, sort_keys=True, ensure_ascii=False).encode())
+            if documents != {entry["source"]:entry for entry in catalog}:
+                raise ValueError("Database catalog provenance mismatch")
+            digest = hashlib.sha256(json.dumps(catalog,sort_keys=True,ensure_ascii=False).encode())
             for entry in catalog:
-                extracted = db.execute("SELECT extracted FROM kb_documents WHERE version=? AND source=?", (self.version, entry["source"])).fetchone()[0]
                 digest.update(entry["source"].encode())
-                digest.update(extracted)
+                digest.update(archives[entry["source"]])
             if digest.hexdigest() != self.metadata["fingerprint"]:
                 raise ValueError("Database catalog integrity failure")
             self.chunks, vectors = [], []
-            for source, payload, blob, vector_hash, text_hash in db.execute("SELECT source,payload,vector,vector_sha256,text_sha256 FROM kb_chunks WHERE version=? ORDER BY ordinal", (self.version,)):
-                chunk = json.loads(payload)
-                if source not in documents or any(chunk.get(k) != v for k, v in documents[source].items()):
-                    raise ValueError("Chunk provenance does not match its source")
-                if hashlib.sha256(blob).hexdigest() != vector_hash or hashlib.sha256(chunk["text"].encode()).hexdigest() != text_hash:
+            rows = db.execute(sql_text("""SELECT ordinal,source,payload,vector_blob,vector_sha256,text_sha256,embedding::text
+                FROM rag.kb_chunks WHERE version=:version ORDER BY ordinal"""), params)
+            for ordinal,source,payload,blob,vector_hash,text_hash,embedding in rows:
+                chunk = json_value(payload)
+                if ordinal != len(self.chunks) or source not in documents or any(chunk.get(k)!=v for k,v in documents[source].items()):
+                    raise ValueError("Database chunk provenance mismatch")
+                if hashlib.sha256(blob).hexdigest()!=vector_hash or hashlib.sha256(chunk["text"].encode()).hexdigest()!=text_hash:
                     raise ValueError("Database chunk integrity failure")
-                vectors.append(np.frombuffer(blob, dtype="<f4"))
+                vector = np.frombuffer(blob,dtype="<f4")
+                stored = np.asarray(json.loads(embedding),dtype=np.float32)
+                if not np.array_equal(vector,stored):
+                    raise ValueError("pgvector embedding integrity failure")
+                vectors.append(vector)
                 self.chunks.append(chunk)
-        if len(self.chunks) != self.metadata.get("chunk_count", len(self.chunks)):
-            raise ValueError("Database chunk count integrity failure")
-        self.vectors = np.asarray(vectors, dtype=np.float32)
-        if (self.vectors.ndim != 2 or not len(self.chunks) or self.vectors.shape[1] != self.metadata["dimension"]
-                or not np.isfinite(self.vectors).all() or not np.allclose(np.linalg.norm(self.vectors, axis=1), 1, atol=1e-4)):
-            raise ValueError("Invalid database vectors")
-
-    def _prepare_terms(self):
-        self.terms = [Counter(tokens(chunk["text"])) for chunk in self.chunks]
-        self.lengths = np.array([sum(terms.values()) for terms in self.terms], dtype=float)
-        self.avg_length = max(1.0, float(self.lengths.mean()))
-        self.df = Counter(term for terms in self.terms for term in terms)
+        self.vectors = np.asarray(vectors,dtype=np.float32)  # audit only, never query dot products
+        if (self.vectors.shape != (self.metadata["chunk_count"],384) or not len(self.chunks)
+                or not np.isfinite(self.vectors).all() or not np.allclose(np.linalg.norm(self.vectors,axis=1),1,atol=1e-4)):
+            raise ValueError("Invalid database vectors or chunk count")
 
     def _check_current(self):
-        with self._connect() as db:
-            version = db.execute("SELECT active_version FROM kb_state WHERE id=1").fetchone()[0]
+        with self.engine.connect() as db:
+            version = db.execute(sql_text("SELECT active_version FROM rag.kb_state WHERE id=1")).scalar_one()
         if version != self.version:
             model = self.metadata["model"]
             self._load_database()
             if model != self.metadata["model"]:
                 self.encoder = load_encoder(self.metadata["model"])
             self._prepare_terms()
+
+    def _similarities(self, query_vector):
+        # pgvector performs exact cosine distance inside PostgreSQL.
+        literal = "["+",".join(format(float(v),".17g") for v in query_vector)+"]"
+        cosine = np.full(len(self.chunks), -np.inf, dtype=float)
+        with self.engine.connect() as db:
+            rows = db.execute(sql_text("""SELECT ordinal,1-(embedding OPERATOR(public.<=>) CAST(:query AS public.vector)) AS similarity
+                FROM rag.kb_chunks WHERE version=:version ORDER BY embedding OPERATOR(public.<=>) CAST(:query AS public.vector),ordinal"""),
+                {"query":literal,"version":self.version})
+            for ordinal,similarity in rows:
+                if ordinal < len(cosine) and similarity is not None:
+                    cosine[ordinal] = float(similarity)
+        return cosine
+
+    def _prepare_terms(self):
+        self.terms = [Counter(tokens(chunk["text"])) for chunk in self.chunks]
+        self.lengths = np.array([sum(terms.values()) for terms in self.terms], dtype=float)
+        self.avg_length = max(1.0, float(self.lengths.mean()))
+        self.df = Counter(term for terms in self.terms for term in terms)
 
     def _bm25(self, query):
         scores = np.zeros(len(self.chunks), dtype=float)
@@ -363,7 +346,7 @@ class KnowledgeRetriever:
         q /= norm
         if q.shape[0] != self.vectors.shape[1]:
             raise ValueError("Embedding dimensions do not match the index")
-        cosine = self.vectors @ q
+        cosine = self._similarities(q)
         lexical = self._bm25(expand_query(query + " " + context))
         eligible = [i for i, chunk in enumerate(self.chunks)
                     if (kind is None or chunk["kind"] == kind) and cosine[i] >= self.min_similarity
@@ -408,7 +391,7 @@ class KnowledgeRetriever:
             if len(hits) == top_k:
                 break
         return {"success": True, "query": query, "hits": hits,
-                "database_version": self.version, "retrieval_backend": "local_sqlite",
+                "database_version": self.version, "retrieval_backend": "postgresql_pgvector",
                 "policy_jurisdiction": jurisdiction,
                 "excluded_overdue_documents": sorted({c["source"] for c in self.chunks if date.fromisoformat(c["review_due"]) < date.today()}),
                 "maintenance_evidence_found": any(hit["kind"] == "maintenance" for hit in hits),
@@ -418,11 +401,9 @@ class KnowledgeRetriever:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("query")
-    parser.add_argument("--root", type=Path, default=BASE_DIR / "knowledge")
-    parser.add_argument("--db", "--index", dest="index", type=Path, default=DEFAULT_DB)
     parser.add_argument("--kind", choices=sorted(KINDS))
     args = parser.parse_args()
-    retriever = KnowledgeRetriever(args.root, args.index,
+    retriever = KnowledgeRetriever(
                                    min_similarity=float(os.getenv("RAG_MIN_SIMILARITY", "0.32")))
     print(json.dumps(retriever.search(args.query, kind=args.kind), ensure_ascii=False, indent=2))
 

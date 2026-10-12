@@ -6,27 +6,7 @@ from sqlalchemy.engine import URL
 # DATABASE
 # ============================================================
 
-def create_mysql_engine(
-    username="root",
-    password="",
-    host="127.0.0.1",
-    port=3306,
-    database="fleetcareai",
-):
-
-    url = URL.create(
-        drivername="mysql+pymysql",
-        username=username,
-        password=password,
-        host=host,
-        port=port,
-        database=database,
-    )
-
-    return create_engine(
-        url,
-        pool_pre_ping=True,
-    )
+from database import create_postgres_engine
 
 
 # ============================================================
@@ -59,6 +39,8 @@ def get_vehicle_analysis(
             analysis_id,
             vehicle_id,
             prediction_at,
+            time_step, history_count, risk48_score, risk24_score, risk12_score,
+            risk24_percentile, rule_trace, hybrid_ranking_score, priority_score,
 
             state,
             confidence_score,
@@ -83,7 +65,7 @@ def get_vehicle_analysis(
             evidence,
             reason
 
-        FROM analysis
+        FROM public.analysis
 
         WHERE vehicle_id = :vehicle_id
 
@@ -138,7 +120,7 @@ def get_vehicle_analysis(
             shap_value,
             contribution_rank
 
-        FROM prediction_shap
+        FROM public.prediction_shap
 
         WHERE analysis_id = :analysis_id
 
@@ -170,6 +152,8 @@ def get_vehicle_analysis(
 
         history.append(
             {
+                "analysis_id": int(row["analysis_id"]),
+                "time_step": float(row["time_step"]) if row["time_step"] is not None else None,
                 "prediction_at":
                     str(row["prediction_at"]),
 
@@ -244,6 +228,16 @@ def get_vehicle_analysis(
         # ----------------------------------------------------
 
         "current": {
+            "time_step": float(current["time_step"]) if current["time_step"] is not None else None,
+            "history_count": int(current["history_count"]) if current["history_count"] is not None else None,
+            "risk48_score": float(current["risk48_score"]) if current["risk48_score"] is not None else None,
+            "risk24_score": float(current["risk24_score"]) if current["risk24_score"] is not None else None,
+            "risk12_score": float(current["risk12_score"]) if current["risk12_score"] is not None else None,
+            "risk24_percentile": float(current["risk24_percentile"]) if current["risk24_percentile"] is not None else None,
+            "rule_trace": current["rule_trace"],
+            "hybrid_ranking_score": float(current["hybrid_ranking_score"]) if current["hybrid_ranking_score"] is not None else None,
+            "priority_score": float(current["priority_score"]) if current["priority_score"] is not None else None,
+
 
             "analysis_id":
                 int(current["analysis_id"]),
@@ -356,7 +350,7 @@ if __name__ == "__main__":
 
     import json
 
-    engine = create_mysql_engine()
+    engine = create_postgres_engine()
 
     result = get_vehicle_analysis(
         vehicle_id=1492,

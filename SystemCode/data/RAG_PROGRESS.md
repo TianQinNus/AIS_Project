@@ -1,32 +1,21 @@
-# RAG v2 最新进度与团队交接
+# RAG v3 进度：2026-10-12
 
-更新日期：2026-10-11。此记录替代先前 NPZ/人工整理摘要的 RAG 进度描述。
+当前架构：同一 PostgreSQL 数据库，public 业务表 + rag 知识表，pgvector 精确余弦查询。替代前一版 MySQL + SQLite/NPZ 运行架构。
 
-## 已完成
+完成：
+- 按 fleetcare_new.sql 核对 public.analysis / prediction_shap / truck / truck_readout。
+- 统一 PostgreSQL 配置、psycopg 驱动；车辆查询扩展真实风险/时间/规则字段。
+- 新增 rag schema 建表 SQL，JSONB 原文元数据、BYTEA 原文、vector(384) 嵌入。
+- 保留切分、BM25、融合、地区/期限和引用检查；相似度在 pgvector 中计算。
+- 建库事务、版本切换、回滚、校验和维数约束；发布可直接导入的 v3 向量种子。
+- 网页 ask/search 路径与主要字段兼容；backend 标识改为 postgresql_pgvector。
+- 模型数据库连接改 PostgreSQL；INSERT RETURNING 对应本批分析 ID；预测公式不改。
+- 当前 4 份官方原文 +1 份项目说明，274 片段、384 维。
 
-1. 从固定官方 HTTPS 站点取得完整原文，确定性提取段落与表格，不用 LLM 改写知识。
-2. 有效知识：4 份官方源（DVSA/HSE/LTA Inspection/LTA Commercial）+1 份项目规则，273 片段、384 维。
-3. SQLite 保存原文、文本、向量、版本和来源；只读查询、校验完整性、事务发布；原文文件移走仍可检索。
-4. 多语言向量与 BM25 混合检索、中文词汇映射、车型检验频率表格行优先匹配。
-5. Agent 联合 MySQL 模型事实和文档证据，保持 ask_fleetcare 与 ask_fleetcare_detailed 接口。
-6. 按地区、类别与审核期限过滤；来源缺失、低相关性和数据库失败返回可展示的警告。
-7. 新增 HTTP 联调适配层、两类 JSON 接口、CORS 和参数验证，以及网页团队 README。
-8. Git 发布当前有效版本的 SQLite 种子库；工作缓存与真实凭据继续忽略。
+验证：41 项测试、13 条真实检索用例；提供 SQL 的分析/SHAP 样本查询，插入 ID、种子重复导入及组合查询已验证。官方知识的 SQLite/pgvector 距离对照见交付测试报告。
 
-## 验证
+边界：本轮 SQL/pgvector 执行使用 PGlite 的 PostgreSQL 18.3 测试引擎，原生 PostgreSQL 受共享内存限制。未连接团队 PostgreSQL 16.15 服务；没有实际 OpenAI 生成或完整模型管线运行。团队部署时应按 README 配置实际数据库、扩展、权限和模型缓存后复核。
 
-- 32 项单元测试通过：26 项核心+6 项 HTTP 契约。
-- 13 条真实嵌入检索用例通过。
-- 网络阻断、外部原文目录不存在时真实查询通过。
-- 本地 HTTP search 使用真实数据库、真实缓存模型验证。
-- 真实 OpenAI/MySQL 综合问答尚待团队环境联调；不宣称线上部署完成。
+maintenance 回答通用检查、缺陷报告和维护安全参考，不做具体零件故障诊断或未经 OEM 手册支持的拆装步骤。官方原文与政策适用边界保持不变。
 
-## 网页团队下一步
-
-阅读 README_RAG_WEB.md。后端先运行 search 验证知识库，再配置 OpenAI/MySQL 并运行 ask。前端显示 answer、车辆成功/失败状态、被引用的来源卡片和 retrieval_warnings，不把 similarity 当故障概率。使用数据库中存在的整数 vehicle_id，示例数字不是已验证车辆。
-
-## 当前边界
-
-维护知识是通用检查参考，不是车型 OEM 维修工序。英国维护指导不代表新加坡法规。政策属于 SG 参考，法定检验适用须核实车型/车龄/重量。SHAP 与匿名 Component X 不构成部件诊断。检索全本地，LLM 生成仍用 OpenAI；MySQL/SQLite 由 Agent 汇总而非物理合并。
-
-官方快照日期 2026-10-08。政策审核期限 2027-01-06，维护/项目说明为 2027-10-08；期限是项目约定，不是法律有效期。法规变更后应主动刷新与人工检查，再建库发布。
+网页交接：新增 WEB_RAG_DEPLOYMENT.md 逐步操作指南；prepare_embedding_model.py 只准备缓存；check_rag_setup.py 只读检查数据库、扩展、知识和车辆查询。GitHub同步包含代码/种子/报告，不包含业务dump或真实凭据。

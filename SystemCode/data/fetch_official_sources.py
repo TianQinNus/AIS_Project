@@ -112,7 +112,7 @@ def refresh(root, *, cached=None):
                             sha256=hashlib.sha256(data).hexdigest(), original_sha256=hashlib.sha256(raw).hexdigest()))
     project = root / "project/fleetcare_policy.md"
     catalog.append(dict(source="project/fleetcare_policy.md", title="FleetCare prototype model boundaries",
-                        kind="project", version="Project policy v2", reviewed=True, expert_validated=False,
+                        kind="project", version="Project policy v3 PostgreSQL", reviewed=True, expert_validated=False,
                         authority="project", publisher="FleetCare Group47", evidence_type="project_policy",
                         jurisdiction="GLOBAL", status="active", applicability="Prototype only; not a government or OEM standard.",
                         verified_on=now.date().isoformat(), review_due=(now.date()+timedelta(days=365)).isoformat(),

@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 
 from knowledge_rag import KnowledgeRetriever
+from database import create_postgres_engine
 
 BASE_DIR = Path(__file__).resolve().parent
 LOGGER = logging.getLogger(__name__)
@@ -37,7 +38,8 @@ Explain prediction, temporal indicators, rule decision and general knowledge sep
 Risk scores are model scores, not calibrated repair probabilities. Percentiles are
 fleet-relative ranks on 0-100. Operational time units are not hours or calendar days.
 prediction_at is a run timestamp. Stored analysis history may contain reruns of the
-same readout; do not call it physical deterioration without operational-time evidence.
+same readout. Compare supplied time_step values before describing operational
+changes; equal time_step values do not establish physical deterioration.
 SHAP indicates contributions to a prediction, not fault diagnosis or causation.
 Component X and features are anonymous. Do not infer an engine part from a feature.
 
@@ -48,7 +50,7 @@ applicability: generic UK checks or an Australian guide are not Singapore regula
 and do not set vehicle-specific service intervals. Never invent torque, oil grade,
 part numbers, thresholds, replacement intervals, or proof that a part has failed.
 Generic checks are conditional reference information, not diagnosed vehicle faults.
-Knowledge retrieval is exclusively local SQLite; do not browse or invent web evidence.
+Knowledge retrieval is exclusively in the project PostgreSQL database; do not browse or invent web evidence.
 Evidence is an archived primary-source snapshot, not proof of current law or a diagnosis.
 State publisher, jurisdiction and snapshot date for policy/maintenance claims.
 Only kind=policy with jurisdiction=SG may support Singapore statutory obligations.
@@ -99,15 +101,15 @@ class FleetCareAssistant:
     def _knowledge(self, query, context=""):
         try:
             if self.retriever is None:
-                self.retriever = KnowledgeRetriever(
-                    Path(os.getenv("FLEETCARE_KNOWLEDGE_DIR", str(BASE_DIR / "knowledge"))),
-                    Path(os.getenv("FLEETCARE_KNOWLEDGE_DB", os.getenv("FLEETCARE_KNOWLEDGE_INDEX", str(BASE_DIR / "knowledge_index" / "fleetcare_knowledge.sqlite3")))),
+                if self.engine is None:
+                    self.engine = create_postgres_engine()
+                self.retriever = KnowledgeRetriever(engine=self.engine,
                     min_similarity=float(os.getenv("RAG_MIN_SIMILARITY", "0.32")))
             return self.retriever.search(query, context=context, top_k=5)
         except Exception as exc:
             # No connection strings or local error details are sent to the model.
             LOGGER.warning("Knowledge retrieval failed (%s)", type(exc).__name__)
-            return {"success": False, "hits": [], "error": "Knowledge retrieval unavailable. Check the local SQLite database and cached embedding model."}
+            return {"success": False, "hits": [], "error": "Knowledge retrieval unavailable. Check the PostgreSQL pgvector knowledge tables and cached embedding model."}
 
     def _vehicle(self, vehicle_id):
         if isinstance(vehicle_id, bool) or not isinstance(vehicle_id, int):
@@ -115,14 +117,9 @@ class FleetCareAssistant:
         if self.vehicle_lookup is not None:
             return self.vehicle_lookup(vehicle_id)
         try:
-            from rag import create_mysql_engine, get_vehicle_analysis
+            from rag import get_vehicle_analysis
             if self.engine is None:
-                self.engine = create_mysql_engine(
-                    username=os.getenv("FLEETCARE_DB_USER", "root"),
-                    password=os.getenv("FLEETCARE_DB_PASSWORD", ""),
-                    host=os.getenv("FLEETCARE_DB_HOST", "127.0.0.1"),
-                    port=int(os.getenv("FLEETCARE_DB_PORT", "3306")),
-                    database=os.getenv("FLEETCARE_DB_NAME", "fleetcareai"))
+                self.engine = create_postgres_engine()
             return get_vehicle_analysis(vehicle_id=vehicle_id, engine=self.engine)
         except Exception as exc:
             LOGGER.warning("Vehicle query failed (%s)", type(exc).__name__)

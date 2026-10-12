@@ -9,10 +9,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
 
 from fleetcare_agent import ask_fleetcare_detailed
-from knowledge_rag import BASE_DIR, DEFAULT_DB, KnowledgeRetriever
+from knowledge_rag import KnowledgeRetriever
 
 LOGGER = logging.getLogger(__name__)
-app = FastAPI(title="FleetCare RAG", version="2.0")
+app = FastAPI(title="FleetCare RAG", version="3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[s.strip() for s in os.getenv(
@@ -50,7 +50,7 @@ class SearchRequest(Question):
 
 @app.get("/health")
 def health():
-    """Liveness only; does not certify API keys, MySQL or knowledge readiness."""
+    """Liveness only; does not certify API keys, PostgreSQL or knowledge readiness."""
     return {"status": "alive"}
 
 
@@ -70,12 +70,8 @@ def search(body: SearchRequest):
     try:
         with _lock:
             if _retriever is None:
-                database = os.getenv("FLEETCARE_KNOWLEDGE_DB", os.getenv("FLEETCARE_KNOWLEDGE_INDEX", str(DEFAULT_DB)))
-                _retriever = KnowledgeRetriever(
-                    BASE_DIR / "knowledge", database,
-                    min_similarity=float(os.getenv("RAG_MIN_SIMILARITY", "0.32")),
-                )
+                _retriever = KnowledgeRetriever(min_similarity=float(os.getenv("RAG_MIN_SIMILARITY", "0.32")))
             return _retriever.search(body.question, kind=body.kind)
     except Exception as exc:
         LOGGER.warning("Local knowledge search failed (%s)", type(exc).__name__)
-        raise HTTPException(503, "Local knowledge unavailable; check database and cached model.") from None
+        raise HTTPException(503, "PostgreSQL knowledge unavailable; check pgvector tables and cached model.") from None

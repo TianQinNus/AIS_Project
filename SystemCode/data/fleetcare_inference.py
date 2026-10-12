@@ -1718,24 +1718,14 @@ class FleetCarePredictor:
 
 
 
-def _create_mysql_engine(username, password, host, port, database):
-    from sqlalchemy import create_engine
-    from sqlalchemy.engine import URL
-
-    url = URL.create(
-        drivername="mysql+pymysql",
-        username=username,
-        password=password,
-        host=host,
-        port=port,
-        database=database,
-    )
-    return create_engine(url, pool_pre_ping=True)
+def _create_postgres_engine(username, password, host, port, database):
+    from database import create_postgres_engine
+    return create_postgres_engine(username=username, password=password, host=host, port=port, database=database)
 
 
-def _load_fleet_from_mysql(engine):
+def _load_fleet_from_postgres(engine):
     operational = pd.read_sql(
-        "SELECT * FROM truck_readout ORDER BY vehicle_id, time_step",
+        "SELECT * FROM public.truck_readout ORDER BY vehicle_id, time_step",
         engine,
     ).drop(columns=["readout_id", "collected_at"], errors="ignore")
 
@@ -1743,7 +1733,7 @@ def _load_fleet_from_mysql(engine):
         """
         SELECT vehicle_id, spec_0, spec_1, spec_2, spec_3,
                spec_4, spec_5, spec_6, spec_7
-        FROM truck
+        FROM public.truck
         """,
         engine,
     ).rename(columns={f"spec_{i}": f"Spec_{i}" for i in range(8)})
@@ -1759,10 +1749,10 @@ def _load_fleet_from_mysql(engine):
 def _build_analysis_dataframe(result):
     """
     Convert full FleetCare inference output into the
-    compact production `analysis` table schema.
+    PostgreSQL `public.analysis` table schema.
 
-    Internal model/reasoning variables remain in `result`
-    but are not persisted to MySQL.
+    Persist the core fields and available risk/time/trace fields;
+    other internal variables remain in the model output.
     """
 
     required_columns = [
@@ -1866,40 +1856,33 @@ def _build_analysis_dataframe(result):
             result["reason"],
     })
 
+    extra_fields = {
+        "Risk48":"risk48_score", "Risk24":"risk24_score", "Risk12":"risk12_score",
+        "Risk24_percentile":"risk24_percentile", "time_step":"time_step",
+        "history_count":"history_count", "rule_trace":"rule_trace",
+        "hybrid_ranking_score":"hybrid_ranking_score", "priority_score":"priority_score",
+    }
+    for source, target in extra_fields.items():
+        if source in result.columns:
+            analysis_df[target] = result[source]
+
     return analysis_df
 def _insert_analysis_and_get_ids(analysis_df, engine, table_name):
-    # One explicit timestamp identifies this exact prediction batch.
-    prediction_at = pd.Timestamp.now().floor("s")
+    # PostgreSQL RETURNING obtains exact IDs without timestamp-based recovery.
+    from sqlalchemy import MetaData, Table
     db_df = analysis_df.copy()
-    db_df["prediction_at"] = prediction_at
-
-    db_df.to_sql(
-        table_name,
-        engine,
-        if_exists="append",
-        index=False,
-        chunksize=500,
-    )
-
-    # SQLAlchemy 2.x-safe parameter binding via named parameter.
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        inserted = pd.read_sql(
-            text(f"""
-                SELECT analysis_id, vehicle_id, prediction_at
-                FROM `{table_name}`
-                WHERE prediction_at = :prediction_at
-            """),
-            conn,
-            params={"prediction_at": prediction_at.to_pydatetime()},
-        )
-
-    if len(inserted) != len(analysis_df):
-        raise RuntimeError(
-            f"Expected {len(analysis_df)} inserted analysis rows, recovered {len(inserted)}. "
-            "Use a clean second-level prediction_at batch or clear duplicate test runs."
-        )
-    return inserted
+    db_df["prediction_at"] = pd.Timestamp.now(tz="UTC").to_pydatetime()
+    records = db_df.astype(object).where(pd.notna(db_df), None).to_dict("records")
+    if not records:
+        return pd.DataFrame(columns=["analysis_id", "vehicle_id", "prediction_at"])
+    with engine.begin() as conn:
+        table = Table(table_name, MetaData(), schema="public", autoload_with=conn)
+        result = conn.execute(table.insert().returning(table.c.analysis_id, table.c.vehicle_id,
+                             table.c.prediction_at, sort_by_parameter_order=True), records)
+        rows = result.mappings().all()
+        if len(rows) != len(records):
+            raise RuntimeError("PostgreSQL insert did not return every analysis ID")
+    return pd.DataFrame(rows)
 
 
 def _calculate_top_shap(
@@ -2463,23 +2446,23 @@ def _save_shap(shap_df, inserted_analysis, engine, shap_table):
 
 def run_fleetcare_prediction(
     model_dir,
-    username="root",
-    password="",
-    host="127.0.0.1",
-    port=3306,
-    database="fleetcareai",
+    username=None,
+    password=None,
+    host=None,
+    port=None,
+    database=None,
     analysis_table="analysis",
     shap_table="prediction_shap",
     top_shap=5,
     
 ):
-    """MySQL -> FleetCare inference -> analysis -> Top-N SHAP -> prediction_shap."""
+    """PostgreSQL -> FleetCare inference -> analysis -> Top-N SHAP -> prediction_shap."""
     print("=" * 80)
-    print("FLEETCARE AI - MYSQL INFERENCE + SHAP")
+    print("FLEETCARE AI - POSTGRESQL INFERENCE + SHAP")
     print("=" * 80)
 
-    engine = _create_mysql_engine(username, password, host, port, database)
-    operational, specifications = _load_fleet_from_mysql(engine)
+    engine = _create_postgres_engine(username, password, host, port, database)
+    operational, specifications = _load_fleet_from_postgres(engine)
 
     predictor = FleetCarePredictor(model_dir=model_dir)
     result = predictor.predict(operational, specifications)
@@ -2517,11 +2500,11 @@ if __name__ == "__main__":
     BASE_DIR = Path(__file__).resolve().parent
     result = run_fleetcare_prediction(
         model_dir=BASE_DIR / "processed" / "final_model",
-        username="root",
-        password="",
-        host="127.0.0.1",
-        port=3306,
-        database="fleetcareai",
+        username=None,
+        password=None,
+        host=None,
+        port=None,
+        database=None,
         analysis_table="analysis",
         shap_table="prediction_shap",
         top_shap=5,
