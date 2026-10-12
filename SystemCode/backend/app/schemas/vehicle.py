@@ -14,6 +14,17 @@ class VehicleListItem(CamelModel):
     state: str
     predicted_class: str
     risk_score: int
+    in_maintenance: bool = False
+    is_active: bool = True
+
+
+class VehicleMaintenanceUpdate(CamelModel):
+    in_maintenance: bool
+
+
+class VehicleMaintenanceResponse(CamelModel):
+    vehicle_id: str
+    in_maintenance: bool
 
 
 class VehicleListResponse(CamelModel):
@@ -35,6 +46,12 @@ class VehicleTrendPoint(CamelModel):
     risk_class: str = Field(
         description="Single predicted window: Risk6, Risk12, Risk24, Risk48, or Beyond 48.",
     )
+    time_step: float | None = None
+    trend_direction: str | None = None
+    risk48: float | None = None
+    risk24: float | None = None
+    risk12: float | None = None
+    risk6: float | None = None
 
 
 class VehicleFactor(CamelModel):
@@ -62,6 +79,12 @@ class VehicleDetailResponse(CamelModel):
     priority: str | None = None
     confidence: float | None = None
     risk48_percentile: float | None = None
+    risk24_percentile: float | None = None
     risk12_percentile: float | None = None
+    risk48_score: float | None = None
+    risk24_score: float | None = None
+    risk12_score: float | None = None
     risk6_score: float | None = None
     risk6_percentile: float | None = None
+    time_step: float | None = None
+    trend_direction: str | None = None

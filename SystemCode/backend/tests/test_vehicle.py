@@ -202,6 +202,17 @@ def test_vehicle_list_and_detail():
         assert data["items"][0]["state"] == "C4"
         assert data["items"][0]["predictedClass"] == "Priority Inspect"
         assert data["items"][0]["riskScore"] == 92
+        assert data["items"][0]["inMaintenance"] is False
+
+        turned_on = client.patch(
+            "/api/v1/vehicles/VHC-89321/maintenance",
+            json={"inMaintenance": True},
+        )
+        assert turned_on.status_code == 200
+        assert turned_on.json()["inMaintenance"] is True
+
+        listed = client.get("/api/v1/vehicles", params={"q": "89321"})
+        assert listed.json()["items"][0]["inMaintenance"] is True
 
         filtered = client.get(
             "/api/v1/vehicles",

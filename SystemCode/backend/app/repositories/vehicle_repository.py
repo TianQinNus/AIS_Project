@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.models.analysis import Analysis
 from app.models.prediction_shap import PredictionShap
+from app.models.truck import Truck
 
 # Latest-analysis classes shown by the fleet pages.
 FLEET_ACTIONS = (
@@ -76,7 +77,10 @@ class VehicleRepository:
                 latest.c.state,
                 latest.c.action,
                 latest.c.risk6_percentile,
+                Truck.in_maintenance,
+                Truck.is_active,
             )
+            .join(Truck, Truck.vehicle_id == latest.c.vehicle_id)
             .where(*filters)
             .order_by(
                 desc(latest.c.risk6_percentile).nulls_last(),
@@ -90,11 +94,22 @@ class VehicleRepository:
         return int(total), [dict(row) for row in rows]
 
     @staticmethod
+    def set_maintenance(
+        db: Session,
+        vehicle_id: int,
+        in_maintenance: bool,
+    ) -> bool | None:
+        truck = db.get(Truck, vehicle_id)
+        if truck is None:
+            return None
+        truck.in_maintenance = in_maintenance
+        db.commit()
+        return truck.in_maintenance
+
+    @staticmethod
     def get_history(
         db: Session,
         vehicle_id: int,
-        *,
-        limit: int = 12,
     ) -> list[dict]:
         stmt = (
             select(
@@ -113,13 +128,22 @@ class VehicleRepository:
                 Analysis.action,
                 Analysis.evidence,
                 Analysis.reason,
+                Analysis.risk48_score,
+                Analysis.risk24_score,
+                Analysis.risk24_percentile,
+                Analysis.risk12_score,
+                Analysis.time_step,
+                Analysis.trend_direction,
+                Analysis.risk48_trend,
+                Analysis.risk24_trend,
+                Analysis.risk12_trend,
+                Analysis.risk6_trend,
             )
             .where(Analysis.vehicle_id == vehicle_id)
             .order_by(
                 Analysis.prediction_at.desc(),
                 Analysis.analysis_id.desc(),
             )
-            .limit(limit)
         )
 
         rows = [dict(row) for row in db.execute(stmt).mappings().all()]

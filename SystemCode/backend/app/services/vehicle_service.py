@@ -248,7 +248,7 @@ def _trend_label(value: object) -> str:
 
 
 def _daily_class_trend(history: list[dict]) -> list[VehicleTrendPoint]:
-    """One point per calendar day: the class with the highest probability."""
+    """One stored analysis row per calendar day, including its risk scores."""
     by_day: dict[str, VehicleTrendPoint] = {}
     for row in history:
         label = _trend_label(row["prediction_at"])
@@ -258,8 +258,33 @@ def _daily_class_trend(history: list[dict]) -> list[VehicleTrendPoint]:
                 (row["state"] or "").strip().upper(),
                 "Beyond 48",
             ),
+            time_step=_as_float(row.get("time_step")),
+            trend_direction=row.get("trend_direction"),
+            risk48=_unit_interval(row.get("risk48_score")),
+            risk24=_unit_interval(row.get("risk24_score")),
+            risk12=_unit_interval(row.get("risk12_score")),
+            risk6=_unit_interval(row.get("risk6_score")),
         )
     return list(by_day.values())
+
+
+def _stored_risk_readings(latest: dict) -> list[VehicleRiskReading] | None:
+    """Four window scores already stored on the latest analysis row."""
+    scores = (
+        ("Risk48", latest.get("risk48_score")),
+        ("Risk24", latest.get("risk24_score")),
+        ("Risk12", latest.get("risk12_score")),
+        ("Risk6", latest.get("risk6_score")),
+    )
+    if any(value is None for _, value in scores):
+        return None
+    return [
+        VehicleRiskReading(
+            label=label,
+            value=_format_unit(_unit_interval(value)),
+        )
+        for label, value in scores
+    ]
 
 
 def build_factors(rows: list[dict]) -> list[VehicleFactor]:
@@ -315,6 +340,8 @@ class VehicleService:
                 state=(row["state"] or "Unknown").strip().upper(),
                 predicted_class=present_action(row["action"]).predicted_class,
                 risk_score=risk_score(row["risk6_percentile"]),
+                in_maintenance=bool(row["in_maintenance"]),
+                is_active=bool(row["is_active"]),
             )
             for row in rows
         ]
@@ -324,6 +351,18 @@ class VehicleService:
             page=page,
             page_size=page_size,
             items=items,
+        )
+
+    @staticmethod
+    def set_maintenance(
+        db: Session,
+        vehicle_id: int,
+        in_maintenance: bool,
+    ) -> bool | None:
+        return VehicleRepository.set_maintenance(
+            db,
+            vehicle_id,
+            in_maintenance,
         )
 
     @staticmethod
@@ -346,28 +385,31 @@ class VehicleService:
         presentation = present_action(latest["action"])
 
         trend = _daily_class_trend(history)
-        curve = operational_risk_curve(db, vehicle_id)
-        if curve:
-            latest_curve = curve[-1]
-            risk48 = latest_curve["risk48"]
-            risk24 = latest_curve["risk24"]
-            risk12 = latest_curve["risk12"]
-            risk6 = latest_curve["risk6"]
-            risk_readings = [
-                VehicleRiskReading(label="Risk48", value=_format_unit(risk48)),
-                VehicleRiskReading(label="Risk24", value=_format_unit(risk24)),
-                VehicleRiskReading(label="Risk12", value=_format_unit(risk12)),
-                VehicleRiskReading(label="Risk6", value=_format_unit(risk6)),
-            ]
-        else:
-            risk48 = _percentile_unit(latest["risk48_percentile"])
-            risk12 = _percentile_unit(latest["risk12_percentile"])
-            risk6 = _unit_interval(latest["risk6_score"])
-            risk_readings = [
-                VehicleRiskReading(label="Risk48", value=_format_unit(risk48)),
-                VehicleRiskReading(label="Risk12", value=_format_unit(risk12)),
-                VehicleRiskReading(label="Risk6", value=_format_unit(risk6)),
-            ]
+        risk_readings = _stored_risk_readings(latest)
+        risk6 = _unit_interval(latest["risk6_score"])
+        if risk_readings is None:
+            curve = operational_risk_curve(db, vehicle_id)
+            if curve:
+                latest_curve = curve[-1]
+                risk48 = latest_curve["risk48"]
+                risk24 = latest_curve["risk24"]
+                risk12 = latest_curve["risk12"]
+                risk6 = latest_curve["risk6"]
+                risk_readings = [
+                    VehicleRiskReading(label="Risk48", value=_format_unit(risk48)),
+                    VehicleRiskReading(label="Risk24", value=_format_unit(risk24)),
+                    VehicleRiskReading(label="Risk12", value=_format_unit(risk12)),
+                    VehicleRiskReading(label="Risk6", value=_format_unit(risk6)),
+                ]
+            else:
+                risk48 = _percentile_unit(latest["risk48_percentile"])
+                risk12 = _percentile_unit(latest["risk12_percentile"])
+                risk6 = _unit_interval(latest["risk6_score"])
+                risk_readings = [
+                    VehicleRiskReading(label="Risk48", value=_format_unit(risk48)),
+                    VehicleRiskReading(label="Risk12", value=_format_unit(risk12)),
+                    VehicleRiskReading(label="Risk6", value=_format_unit(risk6)),
+                ]
 
         return VehicleDetailResponse(
             vehicle_id=format_vehicle_id(vehicle_id),
@@ -385,7 +427,13 @@ class VehicleService:
             priority=latest["priority"],
             confidence=_round(latest["confidence_score"], 6),
             risk48_percentile=_round(latest["risk48_percentile"], 2),
+            risk24_percentile=_round(latest.get("risk24_percentile"), 2),
             risk12_percentile=_round(latest["risk12_percentile"], 2),
+            risk48_score=_unit_interval(latest.get("risk48_score")),
+            risk24_score=_unit_interval(latest.get("risk24_score")),
+            risk12_score=_unit_interval(latest.get("risk12_score")),
             risk6_score=risk6,
             risk6_percentile=_round(latest["risk6_percentile"], 2),
+            time_step=_as_float(latest.get("time_step")),
+            trend_direction=latest.get("trend_direction"),
         )

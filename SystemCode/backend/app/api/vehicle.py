@@ -2,7 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.db.dependencies import get_db
-from app.schemas.vehicle import VehicleDetailResponse, VehicleListResponse
+from app.schemas.vehicle import (
+    VehicleDetailResponse,
+    VehicleListResponse,
+    VehicleMaintenanceResponse,
+    VehicleMaintenanceUpdate,
+)
 from app.services.vehicle_service import (
     VehicleQueryError,
     VehicleService,
@@ -48,6 +53,44 @@ def list_vehicles(
         )
     except VehicleQueryError as exc:
         raise HTTPException(status_code=422, detail=exc.detail) from exc
+
+
+@router.patch(
+    "/{vehicle_id}/maintenance",
+    response_model=VehicleMaintenanceResponse,
+    response_model_by_alias=True,
+    summary="Set whether a vehicle needs maintenance",
+)
+def set_vehicle_maintenance(
+    vehicle_id: str,
+    body: VehicleMaintenanceUpdate,
+    db: Session = Depends(get_db),
+) -> VehicleMaintenanceResponse:
+    parsed = parse_vehicle_id(vehicle_id)
+    if parsed is None:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Vehicle id '{vehicle_id}' is not valid. "
+                "Use a number or VHC-<number>."
+            ),
+        )
+
+    updated = VehicleService.set_maintenance(
+        db,
+        parsed,
+        body.in_maintenance,
+    )
+    if updated is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Vehicle '{vehicle_id}' was not found.",
+        )
+
+    return VehicleMaintenanceResponse(
+        vehicle_id=vehicle_id if vehicle_id.upper().startswith("VHC-") else f"VHC-{parsed}",
+        in_maintenance=updated,
+    )
 
 
 @router.get(
