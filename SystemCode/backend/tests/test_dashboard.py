@@ -28,6 +28,15 @@ def test_dashboard():
     assert "risk" in data
     assert "risk_snapshot" in data
     assert "top_risk_alerts" in data
+    assert "manual_review" in data["maintenance_plan"]
+    assert "previous_average_score" in data["risk"]
+    assert "average_score_change" in data["risk"]
+    assert data["risk"]["average_score_trend"] in {
+        "UP",
+        "DOWN",
+        "STABLE",
+        "NO_DATA",
+    }
 
     assert isinstance(
         data["fleet"]["total"],

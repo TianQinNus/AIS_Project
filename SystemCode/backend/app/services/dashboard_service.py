@@ -36,7 +36,7 @@ class DashboardService:
 
         for action, count in snapshot.items():
             percentage = (
-                round(count / analyzed * 100, 1)
+                round(count / analyzed * 100, 2)
                 if analyzed
                 else 0.0
             )
@@ -60,6 +60,7 @@ class DashboardService:
                 snapshot["MONITOR"]
                 + snapshot["CONTINUE"]
             ),
+            manual_review=snapshot["MANUAL_REVIEW"],
         )
 
         # Top Risk Alerts
@@ -90,6 +91,30 @@ class DashboardService:
                 average_score=round(
                     summary["average_risk_score"],
                     4,
+                ),
+                previous_average_score=(
+                    round(
+                        summary[
+                            "previous_average_risk_score"
+                        ],
+                        4,
+                    )
+                    if summary[
+                        "previous_average_risk_score"
+                    ] is not None
+                    else None
+                ),
+                average_score_change=(
+                    round(
+                        summary["average_score_change"],
+                        4,
+                    )
+                    if summary["average_score_change"]
+                    is not None
+                    else None
+                ),
+                average_score_trend=(
+                    summary["average_score_trend"]
                 ),
             ),
             risk_snapshot=snapshot_items,

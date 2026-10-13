@@ -60,6 +60,18 @@ class Analysis(Base):
         Numeric(8, 6)
     )
 
+    risk12_score: Mapped[Decimal | None] = mapped_column(
+        Numeric(8, 6)
+    )
+
+    risk24_score: Mapped[Decimal | None] = mapped_column(
+        Numeric(8, 6)
+    )
+
+    risk48_score: Mapped[Decimal | None] = mapped_column(
+        Numeric(8, 6)
+    )
+
     risk6_percentile: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2)
     )
