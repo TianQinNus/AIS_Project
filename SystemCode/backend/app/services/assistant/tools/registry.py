@@ -4,6 +4,9 @@ from app.services.assistant.tools.vehicle_analysis import (
     VehicleAnalysisTool,
 )
 
+from app.services.assistant.tools.knowledge_search import (
+    KnowledgeSearchTool,
+)
 
 class ToolRegistry:
 
@@ -11,6 +14,7 @@ class ToolRegistry:
 
         self._tools = {
             VehicleAnalysisTool.name: VehicleAnalysisTool,
+            KnowledgeSearchTool.name: KnowledgeSearchTool,
         }
 
     @property
