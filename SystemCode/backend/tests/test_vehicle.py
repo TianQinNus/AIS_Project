@@ -233,11 +233,20 @@ def test_vehicle_list_and_detail():
         assert paged.status_code == 200
         assert paged.json()["items"][0]["vehicleId"] == "VHC-66107"
 
-        invalid_class = client.get(
+        actions = client.get("/api/v1/vehicles/actions")
+        assert actions.status_code == 200
+        assert [item["action"] for item in actions.json()["items"]] == [
+            "PRIORITY_INSPECT",
+            "INSPECT",
+            "CONTINUE",
+        ]
+
+        unknown_class = client.get(
             "/api/v1/vehicles",
             params={"predicted_class": "Broken"},
         )
-        assert invalid_class.status_code == 422
+        assert unknown_class.status_code == 200
+        assert unknown_class.json()["total"] == 0
 
         detail = client.get("/api/v1/vehicles/VHC-89321")
         assert detail.status_code == 200

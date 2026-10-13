@@ -559,7 +559,7 @@ def write_to_postgres(
 
 
 def build_no_history_dataframe(operational, analysis_columns, as_of_date=None):
-    """Return one COLLECT_MORE_DATA decision for each one-readout vehicle."""
+    """Return one INSUFFICIENT_DATA decision for each one-readout vehicle."""
     counts = operational.groupby("vehicle_id")["vehicle_id"].transform("size")
     single = operational.loc[counts == 1, ["vehicle_id", "time_step"]].copy()
     if single.empty:
@@ -576,10 +576,10 @@ def build_no_history_dataframe(operational, analysis_columns, as_of_date=None):
     rows["class_worsening"] = False
     rows["rule_id"] = "TRD"
     rows["priority"] = "REVIEW"
-    rows["action"] = "COLLECT_MORE_DATA"
+    rows["action"] = "INSUFFICIENT_DATA"
     rows["evidence"] = "Only one operational readout is available; temporal change cannot be assessed."
     rows["reason"] = "A second readout is required before the predictive model and temporal rules can be applied."
-    rows["rule_trace"] = "TRD | history_count=1 | action=COLLECT_MORE_DATA"
+    rows["rule_trace"] = "TRD | history_count=1 | action=INSUFFICIENT_DATA"
     rows["priority_score"] = PRIORITY_RANK["REVIEW"] / 5 * 100
     return rows.reset_index(drop=True)
 
@@ -619,7 +619,7 @@ def run_fleetcare_prediction(
         no_history = build_no_history_dataframe(operational, analysis.columns, as_of_date=as_of_date)
         if not no_history.empty:
             analysis = pd.concat([analysis, no_history], ignore_index=True)
-            print(f"Added {len(no_history):,} COLLECT_MORE_DATA decisions")
+            print(f"Added {len(no_history):,} INSUFFICIENT_DATA decisions")
 
         shap_df = calculate_top_shap(predictor, result, top_n=top_shap)
         if persist:

@@ -8,6 +8,8 @@ from app.core.exceptions import ResourceNotFoundError
 from app.repositories.vehicle_repository import VehicleRepository
 from app.services.operational_risk import operational_risk_curve
 from app.schemas.vehicle import (
+    VehicleActionListResponse,
+    VehicleActionOption,
     VehicleDetailResponse,
     VehicleFactor,
     VehicleListItem,
@@ -46,17 +48,6 @@ _STATE_RISK_CLASS = {
     "C3": "Risk12",
     "C4": "Risk6",
 }
-
-_ACTION_FILTERS = {
-    "priority inspect": "PRIORITY_INSPECT",
-    "priority_inspect": "PRIORITY_INSPECT",
-    "inspect": "INSPECT",
-    "enhanced monitor": "ENHANCED_MONITOR",
-    "enhanced_monitor": "ENHANCED_MONITOR",
-    "monitor": "MONITOR",
-    "continue": "CONTINUE",
-}
-
 
 @dataclass(frozen=True)
 class ActionPresentation:
@@ -113,26 +104,20 @@ def parse_vehicle_id(value: str) -> int | None:
     return int(text)
 
 
+def action_label(action: str) -> str:
+    return action.replace("_", " ").title()
+
+
 def resolve_action_filter(value: str | None) -> str | None:
+    """Match a filter to the action stored in analysis, without a fixed list."""
     if value is None:
         return None
 
-    key = value.strip().lower()
-    if not key or key in {"all", "all classes"}:
+    key = value.strip()
+    if not key or key.lower() in {"all", "all classes"}:
         return None
 
-    if key in _ACTION_FILTERS:
-        return _ACTION_FILTERS[key]
-
-    upper = value.strip().upper()
-    if upper in _ACTIONS:
-        return upper
-
-    raise VehicleQueryError(
-        "Unknown predicted class "
-        f"'{value}'. Use Priority Inspect, Inspect, "
-        "Enhanced Monitor, Monitor, or Continue."
-    )
+    return key.upper().replace(" ", "_")
 
 
 def vehicle_search_digits(value: str | None) -> tuple[str | None, bool]:
@@ -167,7 +152,7 @@ def present_action(action: str | None) -> ActionPresentation:
     if action and action in _ACTIONS:
         return _ACTIONS[action]
 
-    label = (action or "Unknown").replace("_", " ").title()
+    label = action_label(action) if action else "Unknown"
     return ActionPresentation(label, label.upper(), "default", label)
 
 
@@ -352,6 +337,19 @@ class VehicleService:
             page_size=page_size,
             items=items,
         )
+
+    @staticmethod
+    def list_actions(db: Session) -> VehicleActionListResponse:
+        items = [
+            VehicleActionOption(
+                action=row["action"],
+                label=action_label(row["action"]),
+                count=int(row["count"]),
+            )
+            for row in VehicleRepository.list_actions(db)
+            if row["action"]
+        ]
+        return VehicleActionListResponse(items=items)
 
     @staticmethod
     def set_maintenance(

@@ -247,47 +247,27 @@ class DashboardRepository:
     def get_risk_snapshot(cls, db: Session) -> dict[str, int]:
         latest = cls._latest_analysis_subquery()
 
+        urgency = func.avg(latest.c.risk6_percentile)
         stmt = (
             select(
                 latest.c.action,
                 func.count().label("count"),
             )
-            .where(latest.c.row_num == 1)
-            .group_by(latest.c.action)
-            .order_by(
-                case(
-                    {
-                        "PRIORITY_INSPECT": 1,
-                        "INSPECT": 2,
-                        "MANUAL_REVIEW": 3,
-                        "ENHANCED_MONITOR": 4,
-                        "MONITOR": 5,
-                        "CONTINUE": 6,
-                        "COLLECT_MORE_DATA": 7,
-                    },
-                    value=latest.c.action,
-                    else_=8,
-                )
+            .where(
+                latest.c.row_num == 1,
+                latest.c.action.is_not(None),
+                latest.c.action != "",
             )
+            .group_by(latest.c.action)
+            .order_by(urgency.desc().nulls_last(), latest.c.action)
         )
 
         rows = db.execute(stmt).all()
-
-        result = {
-            "PRIORITY_INSPECT": 0,
-            "INSPECT": 0,
-            "MANUAL_REVIEW": 0,
-            "ENHANCED_MONITOR": 0,
-            "MONITOR": 0,
-            "CONTINUE": 0,
-            "COLLECT_MORE_DATA": 0,
+        return {
+            action: count
+            for action, count in rows
+            if action
         }
-
-        for action, count in rows:
-            if action in result:
-                result[action] = count
-
-        return result
 
     @classmethod
     def get_top_risk_alerts(

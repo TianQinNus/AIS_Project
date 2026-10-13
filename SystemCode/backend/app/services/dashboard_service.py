@@ -51,16 +51,16 @@ class DashboardService:
 
         # Maintenance Plan Summary
         maintenance_plan = MaintenancePlanSummary(
-            immediate=snapshot["PRIORITY_INSPECT"],
+            immediate=snapshot.get("PRIORITY_INSPECT", 0),
             short_term=(
-                snapshot["INSPECT"]
-                + snapshot["ENHANCED_MONITOR"]
+                snapshot.get("INSPECT", 0)
+                + snapshot.get("ENHANCED_MONITOR", 0)
             ),
             monitor=(
-                snapshot["MONITOR"]
-                + snapshot["CONTINUE"]
+                snapshot.get("MONITOR", 0)
+                + snapshot.get("CONTINUE", 0)
             ),
-            manual_review=snapshot["MANUAL_REVIEW"],
+            manual_review=snapshot.get("MANUAL_REVIEW", 0),
         )
 
         # Top Risk Alerts

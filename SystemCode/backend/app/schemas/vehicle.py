@@ -34,6 +34,16 @@ class VehicleListResponse(CamelModel):
     items: list[VehicleListItem]
 
 
+class VehicleActionOption(CamelModel):
+    action: str
+    label: str
+    count: int
+
+
+class VehicleActionListResponse(CamelModel):
+    items: list[VehicleActionOption]
+
+
 class VehicleRiskReading(CamelModel):
     label: str
     value: str
