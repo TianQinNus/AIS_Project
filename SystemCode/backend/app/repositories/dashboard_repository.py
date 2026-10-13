@@ -1,3 +1,4 @@
+
 from sqlalchemy import (
     Date,
     case,
@@ -5,7 +6,6 @@ from sqlalchemy import (
     desc,
     func,
     select,
-    text,
 )
 from sqlalchemy.orm import Session
 
@@ -16,69 +16,11 @@ from app.models.truck import Truck
 class DashboardRepository:
 
     @staticmethod
-    def _latest_daily_risk_subquery():
-        daily_latest = (
-            select(
-                Analysis.vehicle_id,
-                cast(
-                    Analysis.prediction_at,
-                    Date,
-                ).label("prediction_date"),
-                Analysis.risk6_score,
-                Analysis.risk12_score,
-                Analysis.risk24_score,
-                Analysis.risk48_score,
-                func.row_number()
-                .over(
-                    partition_by=(
-                        Analysis.vehicle_id,
-                        cast(
-                            Analysis.prediction_at,
-                            Date,
-                        ),
-                    ),
-                    order_by=(
-                        Analysis.prediction_at.desc(),
-                        Analysis.analysis_id.desc(),
-                    ),
-                )
-                .label("row_num"),
-            )
-            .where(
-                Analysis.prediction_at
-                >= func.current_date()
-                - text("INTERVAL '4 days'"),
-                Analysis.prediction_at
-                < func.current_date()
-                + text("INTERVAL '1 day'"),
-            )
-            .subquery()
-        )
-
-        return (
-            select(
-                daily_latest.c.prediction_date,
-                (
-                    0.40 * daily_latest.c.risk6_score
-                    + 0.30 * daily_latest.c.risk12_score
-                    + 0.20 * daily_latest.c.risk24_score
-                    + 0.10 * daily_latest.c.risk48_score
-                ).label("composite_risk"),
-            )
-            .join(
-                Truck,
-                Truck.vehicle_id == daily_latest.c.vehicle_id,
-            )
-            .where(
-                daily_latest.c.row_num == 1,
-                Truck.is_active.is_(True),
-                Truck.in_maintenance.is_(False),
-            )
-            .subquery()
-        )
-
-    @staticmethod
     def _latest_analysis_subquery():
+        """
+        Latest analysis for each active vehicle
+        that is not currently under maintenance.
+        """
         return (
             select(
                 Analysis.analysis_id,
@@ -107,17 +49,164 @@ class DashboardRepository:
                 Truck.vehicle_id == Analysis.vehicle_id,
             )
             .where(
-                func.coalesce(
-                    Truck.in_maintenance,
-                    False,
-                ).is_(False),
                 Truck.is_active.is_(True),
+                Truck.in_maintenance.is_(False),
+            )
+            .subquery()
+        )
+
+    @staticmethod
+    def _latest_daily_risk_subquery():
+        """
+        Select the latest prediction per vehicle per day.
+
+        No fixed calendar window is applied.
+        Only complete risk-score records are eligible.
+        """
+
+        prediction_date = cast(
+            Analysis.prediction_at,
+            Date,
+        )
+
+        daily_latest = (
+            select(
+                Analysis.vehicle_id,
+                prediction_date.label("prediction_date"),
+                Analysis.risk6_score,
+                Analysis.risk12_score,
+                Analysis.risk24_score,
+                Analysis.risk48_score,
+                func.row_number()
+                .over(
+                    partition_by=(
+                        Analysis.vehicle_id,
+                        prediction_date,
+                    ),
+                    order_by=(
+                        Analysis.prediction_at.desc(),
+                        Analysis.analysis_id.desc(),
+                    ),
+                )
+                .label("row_num"),
+            )
+            .join(
+                Truck,
+                Truck.vehicle_id == Analysis.vehicle_id,
+            )
+            .where(
+                Truck.is_active.is_(True),
+                Truck.in_maintenance.is_(False),
+            )
+            .subquery()
+        )
+
+        composite_risk = (
+            0.40 * daily_latest.c.risk6_score
+            + 0.30 * daily_latest.c.risk12_score
+            + 0.20 * daily_latest.c.risk24_score
+            + 0.10 * daily_latest.c.risk48_score
+        )
+
+        return (
+            select(
+                daily_latest.c.prediction_date,
+                daily_latest.c.vehicle_id,
+                composite_risk.label("composite_risk"),
+            )
+            .where(
+                daily_latest.c.row_num == 1,
+                daily_latest.c.risk6_score.is_not(None),
+                daily_latest.c.risk12_score.is_not(None),
+                daily_latest.c.risk24_score.is_not(None),
+                daily_latest.c.risk48_score.is_not(None),
             )
             .subquery()
         )
 
     @classmethod
+    def get_average_risk(cls, db: Session) -> dict:
+        """
+        Calculate fleet average risk for the two most
+        recent dates containing valid prediction data.
+        """
+
+        daily_scores = cls._latest_daily_risk_subquery()
+
+        stmt = (
+            select(
+                daily_scores.c.prediction_date,
+                func.avg(
+                    daily_scores.c.composite_risk
+                ).label("fleet_risk_index"),
+                func.count().label("vehicle_count"),
+            )
+            .group_by(
+                daily_scores.c.prediction_date
+            )
+            .order_by(
+                daily_scores.c.prediction_date.desc()
+            )
+            .limit(2)
+        )
+
+        rows = db.execute(stmt).mappings().all()
+
+        if not rows:
+            return {
+                "average_risk_score": None,
+                "previous_average_risk_score": None,
+                "average_score_change": None,
+                "average_score_trend": "NO_DATA",
+                "average_score_date": None,
+                "previous_average_score_date": None,
+            }
+
+        current = rows[0]
+
+        current_score = (
+            float(current["fleet_risk_index"]) * 100
+        )
+
+        previous_score = None
+        previous_date = None
+
+        if len(rows) > 1:
+            previous = rows[1]
+
+            previous_score = (
+                float(previous["fleet_risk_index"]) * 100
+            )
+
+            previous_date = previous["prediction_date"]
+
+        change = (
+            current_score - previous_score
+            if previous_score is not None
+            else None
+        )
+
+        if change is None:
+            trend = "NO_DATA"
+        elif abs(change) < 1e-9:
+            trend = "STABLE"
+        elif change > 0:
+            trend = "UP"
+        else:
+            trend = "DOWN"
+
+        return {
+            "average_risk_score": current_score,
+            "previous_average_risk_score": previous_score,
+            "average_score_change": change,
+            "average_score_trend": trend,
+            "average_score_date": current["prediction_date"],
+            "previous_average_score_date": previous_date,
+        }
+
+    @classmethod
     def get_summary(cls, db: Session) -> dict:
+
         latest = cls._latest_analysis_subquery()
 
         total_fleet = (
@@ -125,107 +214,55 @@ class DashboardRepository:
                 select(func.count())
                 .select_from(Truck)
                 .where(
-                    func.coalesce(
-                        Truck.in_maintenance,
-                        False,
-                    ).is_(False),
                     Truck.is_active.is_(True),
+                    Truck.in_maintenance.is_(False),
                 )
             )
             or 0
         )
 
-        stmt = select(
-            func.count().label("analyzed"),
+        stmt = (
+            select(
+                func.count().label("analyzed"),
 
-            func.sum(
-                case(
-                    (
-                        latest.c.priority.in_(
-                            ["HIGH", "CRITICAL"]
+                func.sum(
+                    case(
+                        (
+                            latest.c.priority.in_(
+                                ["HIGH", "CRITICAL"]
+                            ),
+                            1,
                         ),
-                        1,
-                    ),
-                    else_=0,
-                )
-            ).label("at_risk"),
+                        else_=0,
+                    )
+                ).label("at_risk"),
 
-            func.sum(
-                case(
-                    (
-                        latest.c.priority == "HIGH",
-                        1,
-                    ),
-                    else_=0,
-                )
-            ).label("high"),
+                func.sum(
+                    case(
+                        (
+                            latest.c.priority == "HIGH",
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label("high"),
 
-            func.sum(
-                case(
-                    (
-                        latest.c.priority == "CRITICAL",
-                        1,
-                    ),
-                    else_=0,
-                )
-            ).label("critical"),
-
-        ).where(
-            latest.c.row_num == 1
+                func.sum(
+                    case(
+                        (
+                            latest.c.priority == "CRITICAL",
+                            1,
+                        ),
+                        else_=0,
+                    )
+                ).label("critical"),
+            )
+            .where(latest.c.row_num == 1)
         )
 
         row = db.execute(stmt).mappings().one()
 
-        daily_scores = cls._latest_daily_risk_subquery()
-        daily_averages = (
-            select(
-                daily_scores.c.prediction_date,
-                func.avg(
-                    daily_scores.c.composite_risk
-                ).label("fleet_risk_index")
-            )
-            .group_by(daily_scores.c.prediction_date)
-            .order_by(daily_scores.c.prediction_date.desc())
-            .limit(2)
-        )
-
-        average_rows = db.execute(
-            daily_averages
-        ).mappings().all()
-
-        average_risk_score = (
-            float(average_rows[0]["fleet_risk_index"])
-            * 100
-            if average_rows
-            and average_rows[0]["fleet_risk_index"]
-            is not None
-            else 0.0
-        )
-
-        previous_average_risk_score = (
-            float(average_rows[1]["fleet_risk_index"])
-            * 100
-            if len(average_rows) > 1
-            and average_rows[1]["fleet_risk_index"]
-            is not None
-            else None
-        )
-
-        average_score_change = (
-            average_risk_score
-            - previous_average_risk_score
-            if previous_average_risk_score is not None
-            else None
-        )
-
-        if average_score_change is None:
-            average_score_trend = "NO_DATA"
-        elif average_score_change > 0:
-            average_score_trend = "UP"
-        elif average_score_change < 0:
-            average_score_trend = "DOWN"
-        else:
-            average_score_trend = "STABLE"
+        average = cls.get_average_risk(db)
 
         return {
             "total_fleet": total_fleet,
@@ -233,18 +270,15 @@ class DashboardRepository:
             "at_risk": int(row["at_risk"] or 0),
             "high": int(row["high"] or 0),
             "critical": int(row["critical"] or 0),
-            "average_risk_score": (
-                average_risk_score
-            ),
-            "previous_average_risk_score": (
-                previous_average_risk_score
-            ),
-            "average_score_change": average_score_change,
-            "average_score_trend": average_score_trend,
+            **average,
         }
 
     @classmethod
-    def get_risk_snapshot(cls, db: Session) -> dict[str, int]:
+    def get_risk_snapshot(
+        cls,
+        db: Session,
+    ) -> dict[str, int]:
+
         latest = cls._latest_analysis_subquery()
 
         stmt = (
@@ -285,7 +319,7 @@ class DashboardRepository:
 
         for action, count in rows:
             if action in result:
-                result[action] = count
+                result[action] = int(count)
 
         return result
 
@@ -294,8 +328,9 @@ class DashboardRepository:
         cls,
         db: Session,
         *,
-        limit: int = 3,
+        limit: int = 5,
     ) -> list[dict]:
+
         latest = cls._latest_analysis_subquery()
 
         stmt = (
@@ -315,7 +350,8 @@ class DashboardRepository:
                 ),
             )
             .order_by(
-                desc(latest.c.risk6_percentile)
+                desc(latest.c.risk6_percentile),
+                latest.c.vehicle_id,
             )
             .limit(limit)
         )
