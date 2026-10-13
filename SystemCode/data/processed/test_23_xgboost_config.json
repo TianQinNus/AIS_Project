@@ -1,0 +1,16 @@
+{
+  "algorithm": "xgboost",
+  "weights": [
+    1.0,
+    3.0,
+    10.0,
+    30.0
+  ],
+  "seed": 42,
+  "folds": 5,
+  "lags": "5,20",
+  "k_repair": 3,
+  "k_nonrepair": 2,
+  "risk_definition": "C1-C4 vs C0; risk = 1 - p_c0",
+  "evaluation_note": "Exploratory OOF; official validation previously reused."
+}

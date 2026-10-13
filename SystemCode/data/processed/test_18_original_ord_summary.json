@@ -1,0 +1,49 @@
+{
+  "args": {
+    "data_dir": "/Users/tianqin-gg/Desktop/AIS_Project/SystemCode/data/raw",
+    "output_dir": "/Users/tianqin-gg/Desktop/AIS_Project/SystemCode/data/processed",
+    "features": "original",
+    "k_repair": "3",
+    "k_nonrepair": "2",
+    "folds": "5",
+    "ordinal": "True"
+  },
+  "oof": {
+    "argmax": 0.26556990045857587,
+    "bayes": 0.20679048790628704,
+    "tuned": 0.26744476259658445
+  },
+  "val": {
+    "argmax": {
+      "f1": 0.20027692056609023,
+      "ci": [
+        0.1923181808356524,
+        0.21055547100326844
+      ]
+    },
+    "bayes": {
+      "f1": 0.20952093397745575,
+      "ci": [
+        0.19699159194175211,
+        0.22414971985180923
+      ]
+    },
+    "tuned": {
+      "f1": 0.20531059341952437,
+      "ci": [
+        0.19613430790206898,
+        0.21514303339943908
+      ]
+    }
+  },
+  "val_auc_non_c0": 0.6573170001198034,
+  "chosen": "tuned",
+  "tuned_weights": [
+    1.0,
+    1.031250684361518,
+    0.8122692299306712,
+    1.1001205341404683,
+    1.1389737341655464
+  ],
+  "warning": "Validation set used in earlier development; its prior is used for OOF reweighting."
+}

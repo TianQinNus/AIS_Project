@@ -12,8 +12,7 @@ import test_11c_generalization_robust_xgboost as test11
 
 SCREENING_SEED = 42
 FINAL_SEEDS = [42, 52, 62, 72, 82]
-FINALIST_COUNT_PER_OBJECTIVE = 4
-OUTPUT_PREFIX = "model_12c_nocost"
+FINALIST_COUNT = 5
 
 PARAMETER_SETS = {
     "P1_regularized": {
@@ -276,11 +275,6 @@ def prepare_all_data():
 
 def main():
     output_dir = Path(test11.OUTPUT_DIR)
-    print("=" * 90)
-    print("TEST 12c NO-COST FEATURE AND PARAMETER SEARCH")
-    print("Selection: PolicyDev Mean Horizon AP and Macro-F1")
-    print("Official Validation: diagnostic only")
-    print("=" * 90)
     data, candidates, official = prepare_all_data()
     target_times = official["time_step"].to_numpy()
 
@@ -319,32 +313,10 @@ def main():
         ["MeanHorizonAP", "Risk6_AP", "MacroF1"],
         ascending=[False, False, False],
     )
-    screening.to_csv(output_dir / f"{OUTPUT_PREFIX}_screening_results.csv", index=False)
-
-    # CHANGE 12A: keep finalists for both ranking and five-class classification.
-    ranking_finalists = screening.head(FINALIST_COUNT_PER_OBJECTIVE)[
-        ["FeatureSet", "ParameterSet"]
-    ].copy()
-    ranking_finalists["SelectedFor"] = "RiskRanking"
-    classification_finalists = (
-        screening.sort_values(
-            ["MacroF1", "MeanHorizonAP"],
-            ascending=[False, False],
-        )
-        .head(FINALIST_COUNT_PER_OBJECTIVE)[["FeatureSet", "ParameterSet"]]
-        .copy()
-    )
-    classification_finalists["SelectedFor"] = "FiveClassClassification"
-    finalists = pd.concat(
-        [ranking_finalists, classification_finalists],
-        ignore_index=True,
-    )
-    finalists.to_csv(output_dir / f"{OUTPUT_PREFIX}_finalists.csv", index=False)
-    finalist_pairs = list(
-        finalists[["FeatureSet", "ParameterSet"]]
-        .drop_duplicates()
-        .itertuples(index=False, name=None)
-    )
+    screening.to_csv(output_dir / "model_12c_screening_results.csv", index=False)
+    finalists = screening.head(FINALIST_COUNT)[["FeatureSet", "ParameterSet"]].copy()
+    finalists.to_csv(output_dir / "model_12c_finalists.csv", index=False)
+    finalist_pairs = list(finalists.itertuples(index=False, name=None))
 
     final_rows = []
     for seed in FINAL_SEEDS:
@@ -381,10 +353,7 @@ def main():
         gc.collect()
 
     results = pd.DataFrame(final_rows)
-    results.to_csv(
-        output_dir / f"{OUTPUT_PREFIX}_finalist_results_by_seed.csv",
-        index=False,
-    )
+    results.to_csv(output_dir / "model_12c_finalist_results_by_seed.csv", index=False)
     metric_columns = [
         c
         for c in results.select_dtypes(include=[np.number]).columns
@@ -395,7 +364,7 @@ def main():
         .agg(["mean", "std"])
         .reset_index()
     )
-    summary.to_csv(output_dir / f"{OUTPUT_PREFIX}_finalist_summary.csv", index=False)
+    summary.to_csv(output_dir / "model_12c_finalist_summary.csv", index=False)
 
     policy = results[results["Split"].eq("PolicyDev")]
     policy_ranking = (
@@ -444,34 +413,7 @@ def main():
             },
         ]
     )
-    winner_frame.to_csv(output_dir / f"{OUTPUT_PREFIX}_selected_models.csv", index=False)
-
-    selected_pairs = set(
-        zip(winner_frame["SelectedFeatureSet"], winner_frame["SelectedParameterSet"])
-    )
-    official_diagnostics = results[
-        results["Split"].eq("OfficialValidation")
-        & results.apply(
-            lambda row: (row["FeatureSet"], row["ParameterSet"]) in selected_pairs,
-            axis=1,
-        )
-    ]
-    official_diagnostic_summary = (
-        official_diagnostics.groupby(["FeatureSet", "ParameterSet"])
-        .agg(
-            MacroF1Mean=("MacroF1", "mean"),
-            MacroF1Std=("MacroF1", "std"),
-            MeanHorizonAPMean=("MeanHorizonAP", "mean"),
-            MeanHorizonAPStd=("MeanHorizonAP", "std"),
-            Risk48APMean=("Risk48_AP", "mean"),
-            Risk6APMean=("Risk6_AP", "mean"),
-        )
-        .reset_index()
-    )
-    official_diagnostic_summary.to_csv(
-        output_dir / f"{OUTPUT_PREFIX}_selected_official_diagnostics.csv",
-        index=False,
-    )
+    winner_frame.to_csv(output_dir / "model_12c_selected_model.csv", index=False)
 
     print("\nScreening leaders")
     print(
@@ -483,9 +425,9 @@ def main():
     print(policy_ranking)
     print("\nSelected model")
     print(winner_frame.to_string(index=False))
-    print("\nOfficial Validation diagnostics for selected models")
-    print(official_diagnostic_summary.to_string(index=False))
 
 
 if __name__ == "__main__":
     main()
+
+

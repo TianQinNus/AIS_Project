@@ -1,0 +1,18 @@
+{
+  "features": "original",
+  "seed": 42,
+  "tuning_n": 2523,
+  "holdout_n": 2523,
+  "weights": [
+    1.0,
+    0.5100328870718513,
+    0.36372982914900165,
+    0.34705895777049167,
+    0.3590926602912675
+  ],
+  "tuning_argmax_macro_f1": 0.18586447701634565,
+  "tuning_adjusted_macro_f1": 0.20998195583830945,
+  "holdout_argmax_macro_f1": 0.19631915922152793,
+  "holdout_adjusted_macro_f1": 0.20819555492937902,
+  "warning": "Exploratory only: official validation set used previously for model development. Not an untouched test."
+}

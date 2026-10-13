@@ -1,4 +1,5 @@
 # ============================================================
+# No Cost concern is currently considered in our project
 # FleetCare AI
 # Model 5: Cost-Sensitive Decision Layer
 # Reference model:
