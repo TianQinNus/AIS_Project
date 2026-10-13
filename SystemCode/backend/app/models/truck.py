@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import Boolean, DateTime, Integer, String, false, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -31,9 +31,19 @@ class Truck(Base):
         DateTime(timezone=True)
     )
 
-    in_maintenance: Mapped[bool | None] = mapped_column(Boolean)
+    in_maintenance: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=false(),
+    )
 
-    is_active: Mapped[bool | None] = mapped_column(Boolean)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default=true(),
+    )
 
     analyses: Mapped[list["Analysis"]] = relationship(
         back_populates="truck"

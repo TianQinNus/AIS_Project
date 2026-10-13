@@ -6,6 +6,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     DateTime,
+    Double,
     ForeignKey,
     Integer,
     Numeric,
@@ -98,6 +99,40 @@ class Analysis(Base):
     evidence: Mapped[str | None] = mapped_column(Text)
 
     reason: Mapped[str | None] = mapped_column(Text)
+
+    risk48_score: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    risk24_score: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    risk24_percentile: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    risk12_score: Mapped[Decimal | None] = mapped_column(Numeric(8, 6))
+    risk48_persistence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    risk12_persistence: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    risk48_deterioration_percentile: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2)
+    )
+    risk12_deterioration_percentile: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2)
+    )
+    time_step: Mapped[float | None] = mapped_column(Double)
+    ranking: Mapped[int | None] = mapped_column(Integer)
+    history_count: Mapped[int | None] = mapped_column(Integer)
+    trend_direction: Mapped[str | None] = mapped_column(Text)
+    rule_trace: Mapped[str | None] = mapped_column(Text)
+    hybrid_ranking_score: Mapped[float | None] = mapped_column(Double)
+    priority_score: Mapped[float | None] = mapped_column(Double)
+    risk24_persistence: Mapped[float | None] = mapped_column(Double)
+    risk48_trend: Mapped[float | None] = mapped_column(Double)
+    risk24_trend: Mapped[float | None] = mapped_column(Double)
+    risk12_trend: Mapped[float | None] = mapped_column(Double)
+    risk6_trend: Mapped[float | None] = mapped_column(Double)
+    risk24_deterioration_percentile: Mapped[float | None] = mapped_column(Double)
+    is_risk48_persistent: Mapped[bool | None] = mapped_column(Boolean)
+    is_risk24_persistent: Mapped[bool | None] = mapped_column(Boolean)
+    is_risk12_persistent: Mapped[bool | None] = mapped_column(Boolean)
+    is_risk6_persistent: Mapped[bool | None] = mapped_column(Boolean)
+    fast_risk48_deterioration: Mapped[bool | None] = mapped_column(Boolean)
+    fast_risk24_deterioration: Mapped[bool | None] = mapped_column(Boolean)
+    fast_risk12_deterioration: Mapped[bool | None] = mapped_column(Boolean)
+    fast_risk6_deterioration: Mapped[bool | None] = mapped_column(Boolean)
 
     truck: Mapped["Truck"] = relationship(
         back_populates="analyses"
