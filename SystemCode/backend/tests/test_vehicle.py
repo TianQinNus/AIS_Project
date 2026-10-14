@@ -15,6 +15,7 @@ from app.models.analysis import Analysis
 from app.models.prediction_shap import PredictionShap
 from app.models.truck import Truck
 from app.services.vehicle_service import (
+    _interval_risk_readings,
     build_factors,
     history_label,
     predicted_state_label,
@@ -182,6 +183,18 @@ def test_label_mapping():
     assert factors[1].impact == 0.5
 
 
+def test_current_risk_windows():
+    readings = _interval_risk_readings(0.345, 0.469, 0.631, 0.723)
+    assert readings is not None
+    assert [(item.label, item.value) for item in readings] == [
+        ("Within 6 units", "0.35"),
+        ("6–12 units", "0.12"),
+        ("12–24 units", "0.16"),
+        ("24–48 units", "0.09"),
+        ("Beyond 48 units", "0.28"),
+    ]
+
+
 def test_vehicle_list_and_detail():
     _seed()
     app.dependency_overrides[get_db] = _override_get_db
@@ -201,7 +214,7 @@ def test_vehicle_list_and_detail():
         ]
         assert data["items"][0]["state"] == "C4"
         assert data["items"][0]["predictedClass"] == "Priority Inspect"
-        assert data["items"][0]["riskScore"] == 92
+        assert data["items"][0]["riskScore"] == 92.4
         assert data["items"][0]["inMaintenance"] is False
 
         turned_on = client.patch(

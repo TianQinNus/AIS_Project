@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from sqlalchemy.orm import Session
 
@@ -199,11 +199,11 @@ def _round(value: object, digits: int) -> float | None:
     return round(number, digits)
 
 
-def risk_score(percentile: object) -> int:
-    number = _as_float(percentile)
+def risk_score(percentile: object) -> float:
+    number = _round(percentile, 2)
     if number is None:
-        return 0
-    return int(round(number))
+        return 0.0
+    return number
 
 
 def _unit_interval(value: object) -> float | None:
@@ -253,23 +253,60 @@ def _daily_class_trend(history: list[dict]) -> list[VehicleTrendPoint]:
     return list(by_day.values())
 
 
-def _stored_risk_readings(latest: dict) -> list[VehicleRiskReading] | None:
-    """Four window scores already stored on the latest analysis row."""
-    scores = (
-        ("Risk48", latest.get("risk48_score")),
-        ("Risk24", latest.get("risk24_score")),
-        ("Risk12", latest.get("risk12_score")),
-        ("Risk6", latest.get("risk6_score")),
-    )
-    if any(value is None for _, value in scores):
+def _sql_round(value: Decimal) -> Decimal:
+    """Match PostgreSQL ROUND(numeric, 2): half away from zero."""
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _as_decimal(value: object) -> Decimal | None:
+    if value is None or isinstance(value, bool):
         return None
+    if isinstance(value, Decimal):
+        return value
+    if isinstance(value, (int, float)):
+        return Decimal(str(value))
+    return None
+
+
+def _interval_risk_readings(
+    risk6: object,
+    risk12: object,
+    risk24: object,
+    risk48: object,
+) -> list[VehicleRiskReading] | None:
+    """Split cumulative scores into the five time windows.
+
+    Within 6 units is risk6. Each later window is the difference between
+    neighboring cumulative scores. Beyond 48 units is the remainder.
+    """
+    risk6_score = _as_decimal(risk6)
+    risk12_score = _as_decimal(risk12)
+    risk24_score = _as_decimal(risk24)
+    risk48_score = _as_decimal(risk48)
+    if None in (risk6_score, risk12_score, risk24_score, risk48_score):
+        return None
+
+    buckets = (
+        ("Within 6 units", risk6_score),
+        ("6–12 units", risk12_score - risk6_score),
+        ("12–24 units", risk24_score - risk12_score),
+        ("24–48 units", risk48_score - risk24_score),
+        ("Beyond 48 units", Decimal(1) - risk48_score),
+    )
     return [
-        VehicleRiskReading(
-            label=label,
-            value=_format_unit(_unit_interval(value)),
-        )
-        for label, value in scores
+        VehicleRiskReading(label=label, value=f"{_sql_round(score):.2f}")
+        for label, score in buckets
     ]
+
+
+def _stored_risk_readings(latest: dict) -> list[VehicleRiskReading] | None:
+    """Window shares from the latest analysis row, Within 6 units first."""
+    return _interval_risk_readings(
+        latest.get("risk6_score"),
+        latest.get("risk12_score"),
+        latest.get("risk24_score"),
+        latest.get("risk48_score"),
+    )
 
 
 def build_factors(rows: list[dict]) -> list[VehicleFactor]:
@@ -393,12 +430,12 @@ class VehicleService:
                 risk24 = latest_curve["risk24"]
                 risk12 = latest_curve["risk12"]
                 risk6 = latest_curve["risk6"]
-                risk_readings = [
-                    VehicleRiskReading(label="Risk48", value=_format_unit(risk48)),
-                    VehicleRiskReading(label="Risk24", value=_format_unit(risk24)),
-                    VehicleRiskReading(label="Risk12", value=_format_unit(risk12)),
-                    VehicleRiskReading(label="Risk6", value=_format_unit(risk6)),
-                ]
+                risk_readings = _interval_risk_readings(
+                    risk6,
+                    risk12,
+                    risk24,
+                    risk48,
+                ) or []
             else:
                 risk48 = _percentile_unit(latest["risk48_percentile"])
                 risk12 = _percentile_unit(latest["risk12_percentile"])

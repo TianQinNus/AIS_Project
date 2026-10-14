@@ -13,7 +13,7 @@ class VehicleListItem(CamelModel):
     vehicle_id: str
     state: str
     predicted_class: str
-    risk_score: int
+    risk_score: float
     in_maintenance: bool = False
     is_active: bool = True
 
