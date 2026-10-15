@@ -174,16 +174,17 @@ def predicted_state_label(state: str | None) -> str:
 
 
 def split_reasons(evidence: str | None, reason: str | None) -> list[str]:
-    if evidence:
-        parts = [part.strip() for part in evidence.split(";")]
-        parts = [part for part in parts if part]
-        if parts:
-            return parts
-
+    """Why-this-action lines: the reason sentence, then each evidence item."""
+    parts: list[str] = []
     if reason and reason.strip():
-        return [reason.strip()]
-
-    return []
+        parts.append(reason.strip())
+    if evidence:
+        parts.extend(
+            part.strip()
+            for part in evidence.split(";")
+            if part.strip()
+        )
+    return parts
 
 
 def _as_float(value: object) -> float | None:
@@ -458,6 +459,7 @@ class VehicleService:
             rule=latest["rule_id"] or "",
             reasons=split_reasons(latest["evidence"], latest["reason"]),
             factors=build_factors(factors),
+            evidence=latest["evidence"],
             reason=latest["reason"],
             priority=latest["priority"],
             confidence=_round(latest["confidence_score"], 6),

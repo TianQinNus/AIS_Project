@@ -85,6 +85,7 @@ class VehicleDetailResponse(CamelModel):
     rule: str
     reasons: list[str]
     factors: list[VehicleFactor]
+    evidence: str | None = None
     reason: str | None = None
     priority: str | None = None
     confidence: float | None = None

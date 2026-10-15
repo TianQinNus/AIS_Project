@@ -166,11 +166,13 @@ def test_label_mapping():
     assert history_label("STRONG") == "Strong"
     assert present_action("INSPECT").action_label == "Plan Inspection"
     assert split_reasons(
-        "current model state is C4; Risk6 is in the top 5% of the fleet",
-        "ignored when evidence exists",
+        "Risk6 P99.3; Risk12 P95.9; history=5",
+        "Extreme Risk6 with persistence or fast deterioration.",
     ) == [
-        "current model state is C4",
-        "Risk6 is in the top 5% of the fleet",
+        "Extreme Risk6 with persistence or fast deterioration.",
+        "Risk6 P99.3",
+        "Risk12 P95.9",
+        "history=5",
     ]
 
     factors = build_factors(
@@ -281,7 +283,13 @@ def test_vehicle_list_and_detail():
         assert body["trend"][0]["riskClass"] == "Risk12"
         assert body["trend"][1]["label"] == "2026-10-01 08:00"
         assert body["trend"][1]["riskClass"] == "Risk6"
-        assert body["reasons"][0] == "current model state is C4"
+        assert body["reason"] == "Priority inspection is recommended."
+        assert body["evidence"].startswith("current model state is C4")
+        assert body["reasons"] == [
+            "Priority inspection is recommended.",
+            "current model state is C4",
+            "Risk6 is in the top 5% of the fleet",
+        ]
         assert body["factors"][0] == {"name": "397_12 rate", "impact": 1.0}
         assert body["factors"][1]["impact"] == 0.5
 
