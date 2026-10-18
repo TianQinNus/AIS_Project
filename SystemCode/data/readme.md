@@ -1,1 +1,0 @@
-Provides instructions for downloading and preparing the SCANIA dataset.
