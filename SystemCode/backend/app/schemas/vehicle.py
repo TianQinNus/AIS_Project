@@ -13,7 +13,7 @@ class VehicleListItem(CamelModel):
     vehicle_id: str
     state: str
     predicted_class: str
-    risk_score: int
+    risk_score: float
     in_maintenance: bool = False
     is_active: bool = True
 
@@ -32,6 +32,16 @@ class VehicleListResponse(CamelModel):
     page: int
     page_size: int
     items: list[VehicleListItem]
+
+
+class VehicleActionOption(CamelModel):
+    action: str
+    label: str
+    count: int
+
+
+class VehicleActionListResponse(CamelModel):
+    items: list[VehicleActionOption]
 
 
 class VehicleRiskReading(CamelModel):
@@ -75,6 +85,7 @@ class VehicleDetailResponse(CamelModel):
     rule: str
     reasons: list[str]
     factors: list[VehicleFactor]
+    evidence: str | None = None
     reason: str | None = None
     priority: str | None = None
     confidence: float | None = None

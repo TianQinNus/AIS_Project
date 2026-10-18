@@ -15,6 +15,7 @@ from app.models.analysis import Analysis
 from app.models.prediction_shap import PredictionShap
 from app.models.truck import Truck
 from app.services.vehicle_service import (
+    _interval_risk_readings,
     build_factors,
     history_label,
     predicted_state_label,
@@ -165,11 +166,13 @@ def test_label_mapping():
     assert history_label("STRONG") == "Strong"
     assert present_action("INSPECT").action_label == "Plan Inspection"
     assert split_reasons(
-        "current model state is C4; Risk6 is in the top 5% of the fleet",
-        "ignored when evidence exists",
+        "Risk6 P99.3; Risk12 P95.9; history=5",
+        "Extreme Risk6 with persistence or fast deterioration.",
     ) == [
-        "current model state is C4",
-        "Risk6 is in the top 5% of the fleet",
+        "Extreme Risk6 with persistence or fast deterioration.",
+        "Risk6 P99.3",
+        "Risk12 P95.9",
+        "history=5",
     ]
 
     factors = build_factors(
@@ -180,6 +183,18 @@ def test_label_mapping():
     )
     assert factors[0].impact == 1
     assert factors[1].impact == 0.5
+
+
+def test_current_risk_windows():
+    readings = _interval_risk_readings(0.345, 0.469, 0.631, 0.723)
+    assert readings is not None
+    assert [(item.label, item.value) for item in readings] == [
+        ("Within 6 units", "0.35"),
+        ("6–12 units", "0.12"),
+        ("12–24 units", "0.16"),
+        ("24–48 units", "0.09"),
+        ("Beyond 48 units", "0.28"),
+    ]
 
 
 def test_vehicle_list_and_detail():
@@ -201,7 +216,7 @@ def test_vehicle_list_and_detail():
         ]
         assert data["items"][0]["state"] == "C4"
         assert data["items"][0]["predictedClass"] == "Priority Inspect"
-        assert data["items"][0]["riskScore"] == 92
+        assert data["items"][0]["riskScore"] == 92.4
         assert data["items"][0]["inMaintenance"] is False
 
         turned_on = client.patch(
@@ -233,11 +248,20 @@ def test_vehicle_list_and_detail():
         assert paged.status_code == 200
         assert paged.json()["items"][0]["vehicleId"] == "VHC-66107"
 
-        invalid_class = client.get(
+        actions = client.get("/api/v1/vehicles/actions")
+        assert actions.status_code == 200
+        assert [item["action"] for item in actions.json()["items"]] == [
+            "PRIORITY_INSPECT",
+            "INSPECT",
+            "CONTINUE",
+        ]
+
+        unknown_class = client.get(
             "/api/v1/vehicles",
             params={"predicted_class": "Broken"},
         )
-        assert invalid_class.status_code == 422
+        assert unknown_class.status_code == 200
+        assert unknown_class.json()["total"] == 0
 
         detail = client.get("/api/v1/vehicles/VHC-89321")
         assert detail.status_code == 200
@@ -259,7 +283,13 @@ def test_vehicle_list_and_detail():
         assert body["trend"][0]["riskClass"] == "Risk12"
         assert body["trend"][1]["label"] == "2026-10-01 08:00"
         assert body["trend"][1]["riskClass"] == "Risk6"
-        assert body["reasons"][0] == "current model state is C4"
+        assert body["reason"] == "Priority inspection is recommended."
+        assert body["evidence"].startswith("current model state is C4")
+        assert body["reasons"] == [
+            "Priority inspection is recommended.",
+            "current model state is C4",
+            "Risk6 is in the top 5% of the fleet",
+        ]
         assert body["factors"][0] == {"name": "397_12 rate", "impact": 1.0}
         assert body["factors"][1]["impact"] == 0.5
 

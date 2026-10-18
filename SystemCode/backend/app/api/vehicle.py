@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.db.dependencies import get_db
 from app.schemas.vehicle import (
+    VehicleActionListResponse,
     VehicleDetailResponse,
     VehicleListResponse,
     VehicleMaintenanceResponse,
@@ -34,10 +35,7 @@ def list_vehicles(
     ),
     predicted_class: str | None = Query(
         default=None,
-        description=(
-            "Predicted class filter: Priority Inspect, Inspect, "
-            "Enhanced Monitor, Monitor, or Continue."
-        ),
+        description="Latest analysis action. Omit it to include every action.",
     ),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -53,6 +51,18 @@ def list_vehicles(
         )
     except VehicleQueryError as exc:
         raise HTTPException(status_code=422, detail=exc.detail) from exc
+
+
+@router.get(
+    "/actions",
+    response_model=VehicleActionListResponse,
+    response_model_by_alias=True,
+    summary="List analysis actions, most urgent first",
+)
+def list_vehicle_actions(
+    db: Session = Depends(get_db),
+) -> VehicleActionListResponse:
+    return VehicleService.list_actions(db)
 
 
 @router.patch(

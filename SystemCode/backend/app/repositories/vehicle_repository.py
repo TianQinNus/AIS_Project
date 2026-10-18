@@ -5,15 +5,6 @@ from app.models.analysis import Analysis
 from app.models.prediction_shap import PredictionShap
 from app.models.truck import Truck
 
-# Latest-analysis classes shown by the fleet pages.
-FLEET_ACTIONS = (
-    "CONTINUE",
-    "MONITOR",
-    "ENHANCED_MONITOR",
-    "INSPECT",
-    "PRIORITY_INSPECT",
-)
-
 
 class VehicleRepository:
 
@@ -49,10 +40,7 @@ class VehicleRepository:
         page_size: int,
     ) -> tuple[int, list[dict]]:
         latest = cls._latest_analysis_subquery()
-        filters = [
-            latest.c.row_num == 1,
-            latest.c.action.in_(FLEET_ACTIONS),
-        ]
+        filters = [latest.c.row_num == 1]
 
         if action is not None:
             filters.append(latest.c.action == action)
@@ -92,6 +80,26 @@ class VehicleRepository:
 
         rows = db.execute(stmt).mappings().all()
         return int(total), [dict(row) for row in rows]
+
+    @classmethod
+    def list_actions(cls, db: Session) -> list[dict]:
+        """Actions on the latest analysis, most urgent fleet risk first."""
+        latest = cls._latest_analysis_subquery()
+        urgency = func.avg(latest.c.risk6_percentile)
+        stmt = (
+            select(
+                latest.c.action,
+                func.count().label("count"),
+            )
+            .where(
+                latest.c.row_num == 1,
+                latest.c.action.is_not(None),
+                latest.c.action != "",
+            )
+            .group_by(latest.c.action)
+            .order_by(urgency.desc().nulls_last(), latest.c.action)
+        )
+        return [dict(row) for row in db.execute(stmt).mappings().all()]
 
     @staticmethod
     def set_maintenance(
