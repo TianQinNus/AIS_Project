@@ -57,7 +57,7 @@ Overall, FleetCareAI demonstrates how machine learning, rule-based reasoning, ex
 |---|---|---|
 | Zhang Tianqin | A0356380B | [Confirm specific contributions] |
 | Zhang Yuyue | A0305487X | [Confirm specific contributions] |
-| Ma Jialing | A0305478X | [Confirm specific contributions] |
+| Ma Jialing | A0305478X | Developed React frontend features and FastAPI backend APIs for the Fleet Dashboard and AI assistant. Designed PostgreSQL database integration and implemented fleet risk aggregation, maintenance statistics, and vehicle data retrieval using SQLAlchemy. Integrated Qwen 3.5 Flash with Function Calling and pgvector-based RAG to support vehicle risk explanations and maintenance knowledge queries. Supported frontend–backend integration, API testing, debugging, and system demonstrations. |
 | Gong Yucheng | A0355325E | [Confirm specific contributions] |
 
 **Project Workstreams**
