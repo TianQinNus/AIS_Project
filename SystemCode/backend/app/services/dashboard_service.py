@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 
 from app.repositories.dashboard_repository import (
     DashboardRepository,
@@ -10,6 +11,7 @@ from app.schemas.dashboard import (
     RiskAlert,
     RiskOverview,
     RiskSnapshotItem,
+    MaintenanceCapacity
 )
 
 
@@ -78,6 +80,16 @@ class DashboardService:
             )
             for row in alerts
         ]
+        maintenance_count = DashboardRepository.count_in_maintenance(db)
+
+        capacity_limit = 40
+
+        maintenance_capacity = MaintenanceCapacity(
+            used=maintenance_count,
+            total=capacity_limit,
+            available=max(capacity_limit - maintenance_count, 0),
+            utilisation=round(maintenance_count / capacity_limit * 100, 1),
+        )
 
         return DashboardSummaryResponse(
             fleet=FleetOverview(
@@ -119,5 +131,8 @@ class DashboardService:
             ),
             risk_snapshot=snapshot_items,
             maintenance_plan=maintenance_plan,
+            maintenance_capacity=maintenance_capacity,
             top_risk_alerts=risk_alerts,
         )
+    
+

@@ -23,6 +23,12 @@ export type DashboardResponse = {
 		action: string
 		reason: string
 	}>
+	maintenance_capacity: {
+	used: number
+	total: number
+	available: number
+	utilisation: number
+	}
 }
 
 export async function fetchDashboard(signal?: AbortSignal): Promise<DashboardResponse> {

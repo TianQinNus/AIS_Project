@@ -122,7 +122,9 @@ function DashboardContent() {
       <Row gutter={[16, 16]}>
         {dashboardKpis.map((kpi) => kpi.kind === 'capacity' ? (
           <Col key="maintenance-capacity" xs={24} sm={12} lg={6}>
-            <MaintenanceCapacityCard />
+            <MaintenanceCapacityCard
+              capacity={dashboard.maintenance_capacity}
+            />
           </Col>
         ) : (
           <Col key={kpi.title} xs={24} sm={12} lg={6}>
@@ -229,27 +231,66 @@ function DashboardContent() {
   )
 }
 
-function MaintenanceCapacityCard() {
+type MaintenanceCapacity = {
+  used: number
+  total: number
+  available: number
+  utilisation: number
+}
+
+function MaintenanceCapacityCard({
+  capacity,
+}: {
+  capacity: MaintenanceCapacity
+}) {
+  const percentage = Math.min(
+    Math.max(capacity.utilisation, 0),
+    100
+  )
+
   return (
-    <Card style={maintenanceCapacityCardStyle} styles={{ body: maintenanceCapacityBodyStyle }}>
-      <Text style={maintenanceCapacityTitleStyle}>MAINTENANCE CAPACITY</Text>
+    <Card
+      style={maintenanceCapacityCardStyle}
+      styles={{ body: maintenanceCapacityBodyStyle }}
+    >
+      <Text style={maintenanceCapacityTitleStyle}>
+        MAINTENANCE CAPACITY
+      </Text>
+
       <div style={maintenanceCapacityValueStyle}>
-        <Text strong style={maintenanceCapacityUsedStyle}>30</Text>
-        <Text style={maintenanceCapacityLimitStyle}>/ 40 vehicles per week</Text>
+        <Text strong style={maintenanceCapacityUsedStyle}>
+          {capacity.used}
+        </Text>
+
+        <Text style={maintenanceCapacityLimitStyle}>
+          / {capacity.total} maintenance slots
+        </Text>
       </div>
+
       <div
-        aria-label="75% capacity utilised"
+        aria-label={`${capacity.utilisation}% capacity utilised`}
         role="progressbar"
-        aria-valuemax={40}
+        aria-valuemax={capacity.total}
         aria-valuemin={0}
-        aria-valuenow={30}
+        aria-valuenow={Math.min(capacity.used, capacity.total)}
         style={maintenanceCapacityProgressTrackStyle}
       >
-        <div style={maintenanceCapacityProgressStyle} />
+        <div
+          style={{
+            ...maintenanceCapacityProgressStyle,
+            width: `${percentage}%`,
+          }}
+        />
       </div>
+
       <div style={maintenanceCapacityFooterStyle}>
-        <Text style={maintenanceCapacityUtilisedStyle}>75% capacity utilised</Text>
-        <Text style={maintenanceCapacityAvailableStyle}>10 slots available</Text>
+        <Text style={maintenanceCapacityUtilisedStyle}>
+          {capacity.utilisation.toFixed(1)}% capacity utilised
+        </Text>
+
+        <Text style={maintenanceCapacityAvailableStyle}>
+          {capacity.available} slots available
+        </Text>
       </div>
     </Card>
   )

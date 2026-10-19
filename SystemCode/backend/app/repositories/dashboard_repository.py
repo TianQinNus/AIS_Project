@@ -337,5 +337,19 @@ class DashboardRepository:
         )
 
         rows = db.execute(stmt).mappings().all()
+        
 
         return [dict(row) for row in rows]
+    @staticmethod
+    def count_in_maintenance(db: Session) -> int:
+        return (
+            db.scalar(
+                select(func.count())
+                .select_from(Truck)
+                .where(
+                    Truck.is_active.is_(True),
+                    Truck.in_maintenance.is_(True),
+                )
+            )
+            or 0
+        )

@@ -37,11 +37,16 @@ class MaintenancePlanSummary(BaseModel):
     monitor: int
     manual_review: int
 
-
+class MaintenanceCapacity(BaseModel):
+    used: int
+    total: int
+    available: int
+    utilisation: float
 class DashboardSummaryResponse(BaseModel):
     fleet: FleetOverview
     risk: RiskOverview
     risk_snapshot: list[RiskSnapshotItem]
     maintenance_plan: MaintenancePlanSummary
     top_risk_alerts: list[RiskAlert]
+    maintenance_capacity: MaintenanceCapacity
 
