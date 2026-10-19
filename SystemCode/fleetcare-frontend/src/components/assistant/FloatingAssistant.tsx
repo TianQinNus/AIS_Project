@@ -102,13 +102,45 @@ function FloatingAssistant() {
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<TextAreaRef>(null)
+  const messageListRef = useRef<HTMLDivElement>(null)
+  const shouldFollowMessagesRef = useRef(true)
   const requestControllerRef = useRef<AbortController | null>(null)
+
+  const scrollMessagesToBottom = () => {
+    const messageList = messageListRef.current
+    if (!messageList) return
+
+    messageList.scrollTo({
+      top: messageList.scrollHeight,
+      behavior: 'smooth',
+    })
+  }
+
+  const handleMessageListScroll = () => {
+    const messageList = messageListRef.current
+    if (!messageList) return
+
+    const distanceFromBottom = messageList.scrollHeight - messageList.scrollTop - messageList.clientHeight
+    shouldFollowMessagesRef.current = distanceFromBottom < 48
+  }
 
   useEffect(() => {
     if (isChatOpen) {
       inputRef.current?.focus()
+      shouldFollowMessagesRef.current = true
+      requestAnimationFrame(() => {
+        scrollMessagesToBottom()
+      })
     }
   }, [isChatOpen])
+
+  useEffect(() => {
+    if (!isChatOpen || !shouldFollowMessagesRef.current) return
+
+    requestAnimationFrame(() => {
+      scrollMessagesToBottom()
+    })
+  }, [isChatOpen, messages, isSending])
 
   useEffect(() => {
     return () => requestControllerRef.current?.abort()
@@ -166,7 +198,11 @@ function FloatingAssistant() {
           styles={{ body: chatBodyStyle, header: chatHeaderStyle }}
           style={chatWindowStyle}
         >
-          <div style={messageListStyle}>
+          <div
+            ref={messageListRef}
+            style={messageListStyle}
+            onScroll={handleMessageListScroll}
+          >
             <List
               dataSource={messages}
               split={false}
