@@ -1,6 +1,7 @@
 import {
   ArrowLeftOutlined,
   ArrowUpOutlined,
+  ArrowDownOutlined,
   CheckOutlined,
 } from '@ant-design/icons'
 import { Alert, Button, Card, Col, Flex, List, Row, Space, Spin, Tag, Typography } from 'antd'
@@ -9,6 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { ApiError, getJson } from '../../utils/http'
 import { vehicleEndpoints } from '../../utils/Vehicles/endpoints'
 import type { VehicleDetail, VehicleTrendPoint } from '../../utils/Vehicles/vehicleDetails'
+
 
 const { Text, Title } = Typography
 
@@ -250,19 +252,30 @@ function VehicleDetailContent({ vehicleId }: { vehicleId: string }) {
       </Row>
 
       <Card title="CURRENT RISK">
-        <Row gutter={[16, 16]}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+            gap: 16,
+            width: '100%',
+            minWidth: 600,
+          }}
+        >
           {detail.risks.map((risk) => (
-            <Col key={risk.label} xs={12} sm={6}>
-              <Text style={cardTitleStyle}>{risk.label}</Text>
-              <Title level={3} style={{ margin: '8px 0 0' }}>{formatRiskPercent(risk.value)}</Title>
-            </Col>
+            <div key={risk.label} style={{ textAlign: 'left' }}>
+              <Text style={cardTitleStyle}>
+                {risk.label}
+              </Text>
+              <Title level={3} style={{ margin: '8px 0 0' }}>
+                {formatRiskPercent(risk.value)}
+              </Title>
+            </div>
           ))}
-        </Row>
+        </div>
       </Card>
-
       <Row gutter={[16, 16]} align="stretch">
         <Col xs={24} lg={12}>
-          <Card title="RISK OVER TIME" style={sectionCardStyle}>
+          <Card title="MODEL PREDICTIONS OVER TIME" style={sectionCardStyle}>
             <RiskOverTimeChart points={detail.trend} />
           </Card>
         </Col>
@@ -271,13 +284,34 @@ function VehicleDetailContent({ vehicleId }: { vehicleId: string }) {
             <Space direction="vertical" size={16} style={{ width: '100%' }}>
               {detail.factors.map((factor) => (
                 <div key={factor.name}>
-                  <Flex justify="space-between" align="center" style={{ marginBottom: 6 }}>
-                    <Text>{factor.name}</Text>
-                    <ArrowUpOutlined style={{ color: colors.red }} />
-                  </Flex>
-                  <div style={factorTrackStyle} aria-hidden>
-                    <div style={{ ...factorBarStyle, width: `${Math.round(factor.impact * 100)}%` }} />
-                  </div>
+                <Flex justify="space-between" align="center" style={{ marginBottom: 6 }}>
+                  <Text>{factor.name}</Text>
+
+                  <Space size={8}>
+                    <Text type="secondary">
+                      {factor.shapValue != null
+                        ? Math.abs(factor.shapValue).toFixed(4)
+                        : '—'}
+                    </Text>
+
+                    {factor.shapValue != null && (
+                      factor.shapValue > 0 ? (
+                        <ArrowUpOutlined style={{ color: colors.red }} />
+                      ) : factor.shapValue < 0 ? (
+                        <ArrowDownOutlined style={{ color: colors.green }} />
+                      ) : null
+                    )}
+                  </Space>
+                </Flex>
+
+                <div style={factorTrackStyle} aria-hidden>
+                  <div
+                    style={{
+                      ...factorBarStyle,
+                      width: `${Math.round(factor.impact * 100)}%`,
+                    }}
+                  />
+                </div>
                 </div>
               ))}
               <Alert

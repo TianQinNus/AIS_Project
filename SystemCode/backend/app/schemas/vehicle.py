@@ -71,7 +71,7 @@ class VehicleFactor(CamelModel):
         le=1,
         description="Absolute SHAP magnitude scaled to the strongest returned factor.",
     )
-
+    shap_value: float | None = None
 
 class VehicleDetailResponse(CamelModel):
     vehicle_id: str

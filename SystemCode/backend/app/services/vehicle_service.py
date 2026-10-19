@@ -317,10 +317,12 @@ def build_factors(rows: list[dict]) -> list[VehicleFactor]:
 
     for row, magnitude in zip(rows, magnitudes, strict=True):
         impact = 0.0 if peak == 0 else round(magnitude / peak, 2)
+
         factors.append(
             VehicleFactor(
                 name=row["feature_name"],
                 impact=impact,
+                shap_value=float(row["shap_value"]),
             )
         )
 

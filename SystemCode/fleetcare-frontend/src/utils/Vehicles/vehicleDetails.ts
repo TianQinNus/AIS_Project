@@ -15,6 +15,7 @@ export type VehicleRiskReading = {
 export type VehicleFactor = {
   name: string
   impact: number
+  shapValue?: number | null
 }
 
 export type VehicleDetail = {
