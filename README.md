@@ -25,10 +25,15 @@ The system integrates machine learning, temporal risk analysis, rule-based reaso
 - Maintenance Plan Summary
 - AI Assistant for Vehicle Analysis and Maintenance Knowledge
 
-<img width="1432" height="810" alt="Screenshot 2026-10-20 at 5 23 49 PM" src="https://github.com/user-attachments/assets/9f09e543-c782-4502-93de-eb386263cd94" />
-<img width="1439" height="816" alt="6196e411222bce88b257b9efe301e93f" src="https://github.com/user-attachments/assets/23f37fd4-9874-4217-888a-4a1d3338d3bf" />
-<img width="1438" height="813" alt="c070f3258699d79ca7ae3906823f4703" src="https://github.com/user-attachments/assets/87ee274d-a61a-4d0c-91f8-f8b6b806ea47" />
-<img width="1438" height="812" alt="Screenshot 2026-10-20 at 6 38 21 PM" src="https://github.com/user-attachments/assets/32db6c79-0cc1-42c8-a39d-7f76266b8c9f" />
+## 🎬 Product Demonstration
+
+FleetCare AI is an intelligent predictive maintenance
+decision-support system designed to help fleet managers
+identify high-risk vehicles and prioritise inspections.
+
+[![Watch FleetCare AI Demo](https://github.com/user-attachments/assets/9f09e543-c782-4502-93de-eb386263cd94)](YOUR_VIDEO_URL)
+
+Click the image to watch our 5-minute product demonstration.
 
 ---
 
