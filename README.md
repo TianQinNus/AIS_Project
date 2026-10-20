@@ -2,7 +2,7 @@
 
 **Course:** Intelligent Reasoning Systems (IRS)  
 **Project Name:** FleetCareAI  
-**Group:** [Confirm Group ID]  
+**Group:** Group 47 
 **Institution:** National University of Singapore — Institute of Systems Science (NUS-ISS)
 
 ---
