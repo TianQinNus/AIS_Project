@@ -62,6 +62,12 @@ class VehicleTrendPoint(CamelModel):
     risk24: float | None = None
     risk12: float | None = None
     risk6: float | None = None
+    risk6_percentile: float | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Fleet percentile of the C4 ranking ensemble at this prediction.",
+    )
 
 
 class VehicleFactor(CamelModel):

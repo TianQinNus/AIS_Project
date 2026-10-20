@@ -21,7 +21,13 @@ const colors = {
   muted: '#8c8c8c',
 }
 
-const riskClasses = ['Risk6', 'Risk12', 'Risk24', 'Risk48', 'Beyond 48'] as const
+const stageLabels: Record<string, string> = {
+  'Beyond 48': 'C0',
+  Risk48: 'C1',
+  Risk24: 'C2',
+  Risk12: 'C3',
+  Risk6: 'C4',
+}
 
 function formatRiskPercent(value: string) {
   const number = Number(value)
@@ -42,49 +48,65 @@ const sectionCardStyle = { height: '100%' }
 function RiskOverTimeChart({ points }: { points: VehicleTrendPoint[] }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const width = 560
-  const height = 260
+  const height = 210
   const left = 78
   const right = 16
-  const top = 16
-  const bottom = 78
+  const top = 28
+  const bottom = 34
   const innerWidth = width - left - right
   const innerHeight = height - top - bottom
   const xAt = (index: number) => {
     if (points.length <= 1) return left + innerWidth / 2
     return left + (index / (points.length - 1)) * innerWidth
   }
-  const yAt = (riskClass: string) => {
-    const index = riskClasses.indexOf(riskClass as (typeof riskClasses)[number])
-    const slot = index < 0 ? riskClasses.length - 1 : index
-    return top + (slot / (riskClasses.length - 1)) * innerHeight
-  }
-  const slot = points.length <= 1 ? innerWidth : innerWidth / Math.max(points.length - 1, 1)
-  const labelEvery = Math.max(1, Math.ceil(72 / Math.max(slot, 1)))
+  const yAt = (percentile: number) =>
+    top + ((100 - Math.min(100, Math.max(0, percentile))) / 100) * innerHeight
   const hovered = hoveredIndex === null ? null : points[hoveredIndex]
   const line = points.flatMap((point, index) =>
-    point.riskClass ? [`${xAt(index)},${yAt(point.riskClass)}`] : [],
+    point.risk6Percentile == null
+      ? []
+      : [`${xAt(index)},${yAt(point.risk6Percentile)}`],
   )
+  const ticks = [100, 75, 50, 25, 0]
 
   return (
     <div style={chartFrameStyle}>
       {hovered && hoveredIndex !== null && (
-        <div style={tooltipStyle}>
+        <div
+          style={{
+            ...tooltipStyle,
+            left: `${(xAt(hoveredIndex) / width) * 100}%`,
+            top: `${(yAt(hovered.risk6Percentile ?? 0) / height) * 100}%`,
+            right: 'auto',
+            transform: `translate(${hoveredIndex >= points.length / 2
+              ? 'calc(-100% - 10px)'
+              : '10px'}, ${(hovered.risk6Percentile ?? 0) >= 72
+              ? '10px'
+              : 'calc(-100% - 10px)'})`,
+          }}
+        >
           <Text strong>{hovered.label}</Text>
-          {hovered.riskClass && <Text style={{ color: colors.blue }}>{hovered.riskClass}</Text>}
+          {hovered.risk6Percentile != null && (
+            <Text style={{ color: colors.blue }}>C4 rank P{hovered.risk6Percentile.toFixed(1)}</Text>
+          )}
+          {hovered?.riskClass && (
+            <Text>Predicted stage: {stageLabels[hovered.riskClass] ?? hovered.riskClass}</Text>
+          )}
         </div>
       )}
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Predicted risk class over time" style={chartSvgStyle}>
-        {riskClasses.map((riskClass) => (
-          <g key={riskClass}>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="C4 fleet risk percentile over time" style={chartSvgStyle}>
+        <text x={left} y="13" fill={colors.muted} fontSize="11">C4 fleet percentile</text>
+        {ticks.map((tick) => (
+          <g key={tick}>
             <line
               x1={left}
               x2={width - right}
-              y1={yAt(riskClass)}
-              y2={yAt(riskClass)}
+              y1={yAt(tick)}
+              y2={yAt(tick)}
               stroke="#f0f0f0"
             />
-            <text x={left - 8} y={yAt(riskClass) + 4} fill={colors.muted} fontSize="11" textAnchor="end">
-              {riskClass}
+            <text x={left - 8} y={yAt(tick) + 4} fill={colors.muted} fontSize="11" textAnchor="end">
+              P{tick}
             </text>
           </g>
         ))}
@@ -100,10 +122,10 @@ function RiskOverTimeChart({ points }: { points: VehicleTrendPoint[] }) {
         )}
         {points.map((point, index) => (
           <g key={`${point.label}-${index}`}>
-            {point.riskClass && (
+            {point.risk6Percentile != null && (
               <circle
                 cx={xAt(index)}
-                cy={yAt(point.riskClass)}
+                cy={yAt(point.risk6Percentile)}
                 r={hoveredIndex === index ? 5 : 3.5}
                 fill={colors.blue}
               />
@@ -121,18 +143,15 @@ function RiskOverTimeChart({ points }: { points: VehicleTrendPoint[] }) {
               onMouseEnter={() => setHoveredIndex(index)}
               onMouseLeave={() => setHoveredIndex(null)}
             />
-            {(index % labelEvery === 0 || index === points.length - 1) && (
-              <text
-                x={xAt(index)}
-                y={top + innerHeight + 16}
-                fill={colors.muted}
-                fontSize="11"
-                textAnchor="end"
-                transform={`rotate(-30 ${xAt(index)} ${top + innerHeight + 16})`}
-              >
-                {point.label}
-              </text>
-            )}
+            <text
+              x={xAt(index)}
+              y={top + innerHeight + 18}
+              fill={colors.muted}
+              fontSize="10"
+              textAnchor="middle"
+            >
+              {point.label.slice(5, 10)}
+            </text>
           </g>
         ))}
       </svg>
@@ -275,7 +294,7 @@ function VehicleDetailContent({ vehicleId }: { vehicleId: string }) {
       </Card>
       <Row gutter={[16, 16]} align="stretch">
         <Col xs={24} lg={12}>
-          <Card title="MODEL PREDICTIONS OVER TIME" style={sectionCardStyle}>
+          <Card title="C4 RISK RANK OVER TIME" style={sectionCardStyle}>
             <RiskOverTimeChart points={detail.trend} />
           </Card>
         </Col>
@@ -354,9 +373,10 @@ const chartFrameStyle = { position: 'relative' as const, width: '100%' }
 const chartSvgStyle = { display: 'block', width: '100%', height: 'auto' }
 const tooltipStyle = {
   position: 'absolute' as const,
-  top: 8,
-  right: 8,
   zIndex: 1,
+  pointerEvents: 'none' as const,
+  width: 172,
+  boxSizing: 'border-box' as const,
   display: 'flex',
   flexDirection: 'column' as const,
   gap: 2,

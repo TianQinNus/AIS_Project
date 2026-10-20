@@ -281,8 +281,10 @@ def test_vehicle_list_and_detail():
         assert len(body["trend"]) == 2
         assert body["trend"][0]["label"] == "2026-09-24 08:00"
         assert body["trend"][0]["riskClass"] == "Risk12"
+        assert body["trend"][0]["risk6Percentile"] == 60.0
         assert body["trend"][1]["label"] == "2026-10-01 08:00"
         assert body["trend"][1]["riskClass"] == "Risk6"
+        assert body["trend"][1]["risk6Percentile"] == 92.4
         assert body["reason"] == "Priority inspection is recommended."
         assert body["evidence"].startswith("current model state is C4")
         assert body["reasons"] == [

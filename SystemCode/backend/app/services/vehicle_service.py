@@ -250,6 +250,7 @@ def _daily_class_trend(history: list[dict]) -> list[VehicleTrendPoint]:
             risk24=_unit_interval(row.get("risk24_score")),
             risk12=_unit_interval(row.get("risk12_score")),
             risk6=_unit_interval(row.get("risk6_score")),
+            risk6_percentile=_round(row.get("risk6_percentile"), 2),
         )
     return list(by_day.values())
 
