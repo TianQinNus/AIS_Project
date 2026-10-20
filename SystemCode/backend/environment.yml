@@ -52,3 +52,15 @@ dependencies:
       - uvloop==0.23.0
       - watchfiles==1.3.0
       - websockets==17.1
+      # Qwen API (OpenAI-compatible)
+      - openai
+
+      # RAG / Embedding
+      - sentence-transformers
+      - transformers
+      - torch
+      - huggingface-hub
+      - numpy
+
+      # Data processing
+      - pandas

@@ -1,132 +1,496 @@
-﻿### [ Practice Module ] Project Submission Template: Github Repository & Zip File
+﻿# FleetCareAI — Intelligent Fleet Maintenance Decision Support System
 
-**[ Naming Convention ]** CourseCode-StartDate-BatchCode-TeamName-ProjectName.zip
-
-* **[ MTech Thru-Train Group Project Naming Example ]** IRS-PM-2020-01-18-IS02PT-GRP-AwsomeSG-HDB_BTO_Recommender.zip
-
-* **[ MTech Stackable Group Project Naming Example ]** IRS-PM-2020-01-18-STK02-GRP-AwsomeSG-HDB_BTO_Recommender.zip
-
-[Online editor for this README.md markdown file](https://pandao.github.io/editor.md/en.html "pandao")
+**Course:** Intelligent Reasoning Systems (IRS)  
+**Project Name:** FleetCareAI  
+**Group:** [Confirm Group ID]  
+**Institution:** National University of Singapore — Institute of Systems Science (NUS-ISS)
 
 ---
 
-### <<<<<<<<<<<<<<<<<<<< Start of Template >>>>>>>>>>>>>>>>>>>>
+## SECTION 1: PROJECT TITLE
+
+# FleetCareAI — Intelligent Fleet Maintenance Decision Support System
+
+**Predict Risks. Explain Decisions. Support Maintenance.**
+
+FleetCareAI is an AI-powered fleet maintenance decision support platform designed to help fleet managers and maintenance staff identify high-risk vehicles, understand predictive maintenance recommendations, and access relevant maintenance knowledge.
+
+The system integrates machine learning, temporal risk analysis, rule-based reasoning, explainable AI, and retrieval-augmented generation (RAG) into a unified web application.
+
+**Core Features**
+
+- Fleet Dashboard and Risk Monitoring
+- Vehicle Risk Analysis and Prediction History
+- Explainable Maintenance Recommendations
+- Maintenance Plan Summary
+- AI Assistant for Vehicle Analysis and Maintenance Knowledge
+
+*Project screenshot: Add `SystemCode/screenshots/dashboard.png` after placing the actual screenshot in the repository.*
 
 ---
 
-## SECTION 1 : PROJECT TITLE
-## Singapore Housing & Deveoplment Board - BTO Recommender System
+## SECTION 2: EXECUTIVE SUMMARY / PAPER ABSTRACT
 
-<img src="SystemCode/clips/static/hdb-bto.png"
-     style="float: left; margin-right: 0px;" />
+Commercial fleet maintenance is essential for ensuring vehicle reliability, operational efficiency, and road safety. Traditional maintenance processes often depend on scheduled inspections, manual monitoring, and fragmented maintenance records. These approaches may make it difficult for fleet operators to identify emerging risks, prioritise maintenance activities, and interpret complex vehicle data efficiently.
 
----
+FleetCareAI aims to address these challenges by providing an intelligent fleet maintenance decision support system that combines predictive analytics with explainable reasoning and AI-assisted knowledge retrieval.
 
-## SECTION 2 : EXECUTIVE SUMMARY / PAPER ABSTRACT
-Singapore ranks amongst countries with the highest population density in the world. In a bid to have firm control over long term urban planning, the Singapore government came up with the “Built to Order” (abbreviated BTO) initiative back in 2001. These are new Housing Development Board (HDB) flats tightly controlled by their eligibility and quantity released every year. In more recent years, the modern BTO scheme in Singapore requires a waiting period of 3-4 years, and is generally targeted at young Singaporean couples looking to purchase their first property and set up a family. Nationality and income ceilings are some of the broad filters that determine one’s eligibility for the highly sought after projects. 
+The system uses machine learning models to assess vehicle conditions and generate risk scores across multiple prediction horizons. A temporal reasoning component examines historical predictions, risk persistence, and deterioration indicators to provide additional context for vehicle risk assessments.
 
+A rule-based reasoning engine then translates these assessments into maintenance priorities and recommended actions. Each decision includes supporting evidence and explanations, helping users understand why a particular vehicle requires inspection, enhanced monitoring, or continued operation.
 
-Our team, comprising of 6 young Singaporeans, all hope to be property owners one day. Many of our peers opt for BTO flats due to their affordability, existence of financial aid from the government, as well as their resale value. However, there often exists a knowledge gap for these young couples during the decision making process and they end up making potentially regretful decisions. We would like to bridge this knowledge gap, and have hence chosen to base our project on creating a recommender system for BTO flats, utilizing the data from recent launches in Tampines, Eunos, Sengkang and Punggol. 
+To improve interpretability, the system incorporates SHAP-based explanations that identify important feature contributions to model predictions. These explanations support model transparency but do not constitute confirmed mechanical fault diagnoses.
 
+FleetCareAI also provides an interactive web-based Dashboard. Fleet managers and maintenance staff can monitor fleet-wide risk distribution, identify high-priority vehicles, review maintenance capacity, and organise inspection activities based on recommended actions.
 
-Using the techniques imparted to us in lectures, our group first set out to build a sizeable knowledge base via conducting an interview and administering a survey. While building the system, we utilized tools such as Java to scrape real time data from HDB website and transform it into a database, CLIPS to synthesize the rule based reasoning process, and Python to integrate it into an easy to use UI for the everyday user. To add icing on the cake, we even hosted the system on a website so that the everyday user can access it through the click of a link.
+In addition, an AI Assistant powered by Qwen supports natural-language interactions. Through Function Calling, the assistant can retrieve vehicle-specific predictions and analysis results from PostgreSQL. It also integrates retrieval-augmented generation using multilingual embeddings and pgvector to retrieve relevant maintenance guidance, project knowledge, and Singapore transport policy references.
 
+The system is developed using React, FastAPI, SQLAlchemy, PostgreSQL, pgvector, and Qwen. Its modular architecture separates the presentation layer, business logic, AI orchestration, and data access, supporting maintainability and future extension.
 
-Our team had an amazing time working on this project, and hope to share our insights with everyone. Despite a focus on BTO flats, we would recommend it for everybody interested in understanding property market trends for residence or investment purposes. There truly are a wide array of factors behind the decision to invest in a property, and we only wish there was more time to work on the scope and scale of the project. 
-
----
-
-## SECTION 3 : CREDITS / PROJECT CONTRIBUTION
-
-| Official Full Name  | Student ID (MTech Applicable)  | Work Items (Who Did What) | Email (Optional) |
-| :------------ |:---------------:| :-----| :-----|
-| Desmond Chua | A1234567A | xxxxxxxxxx yyyyyyyyyy zzzzzzzzzz| A1234567A@nus.edu.sg |
-| Yucheng Gong | A1234567B | xxxxxxxxxx yyyyyyyyyy zzzzzzzzzz| A1234567B@gmail.com |
-| Chee Jia Wei | A1234567C | xxxxxxxxxx yyyyyyyyyy zzzzzzzzzz| A1234567C@outlook.com |
-| Ganesh Kumar | A1234567D | xxxxxxxxxx yyyyyyyyyy zzzzzzzzzz| A1234567D@yahoo.com |
-| Jeanette Lim | A1234567E | xxxxxxxxxx yyyyyyyyyy zzzzzzzzzz| A1234567E@qq.com |
+Overall, FleetCareAI demonstrates how machine learning, rule-based reasoning, explainable AI, and knowledge-grounded assistance can be integrated to support more informed fleet maintenance decisions.
 
 ---
 
-## SECTION 4 : VIDEO OF SYSTEM MODELLING & USE CASE DEMO
+## SECTION 3: CREDITS / PROJECT CONTRIBUTION
 
-[![Sudoku AI Solver](http://img.youtube.com/vi/-AiYLUjP6o8/0.jpg)](https://youtu.be/-AiYLUjP6o8 "Sudoku AI Solver")
+| Official Full Name | Student ID | Project Contribution |
+|---|---|---|
+| Zhang Tianqin | A0356380B | [Confirm specific contributions] |
+| Zhang Yuyue | A0305487X | [Confirm specific contributions] |
+| Ma Jialing | A0305478X | Developed React frontend features and FastAPI backend APIs for the Fleet Dashboard and AI assistant. Designed PostgreSQL database integration and implemented fleet risk aggregation, maintenance statistics, and vehicle data retrieval using SQLAlchemy. Integrated Qwen 3.5 Flash with Function Calling and pgvector-based RAG to support vehicle risk explanations and maintenance knowledge queries. Supported frontend–backend integration, API testing, debugging, and system demonstrations. |
+| Gong Yucheng | A0355325E | [Confirm specific contributions] |
 
-Note: It is not mandatory for every project member to appear in video presentation; Presentation by one project member is acceptable. 
-More reference video presentations [here](https://telescopeuser.wordpress.com/2018/03/31/master-of-technology-solution-know-how-video-index-2/ "video presentations")
+**Project Workstreams**
 
----
+The project includes the following major workstreams:
 
-## SECTION 5 : USER GUIDE
+1. Machine Learning Model Development and Evaluation
+2. Temporal Risk Analysis and Rule-Based Reasoning
+3. Explainable AI and SHAP Integration
+4. Backend API and Database Development
+5. Frontend Dashboard and Vehicle Analysis
+6. AI Assistant, Function Calling, and RAG Integration
+7. System Integration, Testing, Documentation, and Demonstration
 
-`Refer to appendix <Installation & User Guide> in project report at Github Folder: ProjectReport`
-
-### [ 1 ] To run the system using iss-vm
-
-> download pre-built virtual machine from http://bit.ly/iss-vm
-
-> start iss-vm
-
-> open terminal in iss-vm
-
-> $ git clone https://github.com/telescopeuser/Workshop-Project-Submission-Template.git
-
-> $ source activate iss-env-py2
-
-> (iss-env-py2) $ cd Workshop-Project-Submission-Template/SystemCode/clips
-
-> (iss-env-py2) $ python app.py
-
-> **Go to URL using web browser** http://0.0.0.0:5000 or http://127.0.0.1:5000
-
-### [ 2 ] To run the system in other/local machine:
-### Install additional necessary libraries. This application works in python 2 only.
-
-> $ sudo apt-get install python-clips clips build-essential libssl-dev libffi-dev python-dev python-pip
-
-> $ pip install pyclips flask flask-socketio eventlet simplejson pandas
-
----
-## SECTION 6 : PROJECT REPORT / PAPER
-
-`Refer to project report at Github Folder: ProjectReport`
-
-**Recommended Sections for Project Report / Paper:**
-- Executive Summary / Paper Abstract
-- Sponsor Company Introduction (if applicable)
-- Business Problem Background
-- Market Research
-- Project Objectives & Success Measurements
-- Project Solution (To detail domain modelling & system design.)
-- Project Implementation (To detail system development & testing approach.)
-- Project Performance & Validation (To prove project objectives are met.)
-- Project Conclusions: Findings & Recommendation
-- Appendix of report: Project Proposal
-- Appendix of report: Mapped System Functionalities against knowledge, techniques and skills of modular courses: MR, RS, CGS
-- Appendix of report: Installation and User Guide
-- Appendix of report: 1-2 pages individual project report per project member, including: Individual reflection of project journey: (1) personal contribution to group project (2) what learnt is most useful for you (3) how you can apply the knowledge and skills in other situations or your workplaces
-- Appendix of report: List of Abbreviations (if applicable)
-- Appendix of report: References (if applicable)
-
----
-## SECTION 7 : MISCELLANEOUS
-
-`Refer to Github Folder: Miscellaneous`
-
-### HDB_BTO_SURVEY.xlsx
-* Results of survey
-* Insights derived, which were subsequently used in our system
+The final contribution table should specify each member's actual responsibilities and deliverables.
 
 ---
 
-### <<<<<<<<<<<<<<<<<<<< End of Template >>>>>>>>>>>>>>>>>>>>
+## SECTION 4: VIDEO OF SYSTEM MODELLING & USE CASE DEMO
+
+FleetCareAI includes two video presentations covering the product experience and the technical implementation.
+
+### 4.1 Product Demonstration Video
+
+**Video Link:** [Insert YouTube / Google Drive URL]
+
+The product demonstration introduces FleetCareAI from the perspective of fleet managers and maintenance staff.
+
+It demonstrates:
+
+- Fleet-wide monitoring through the Dashboard
+- Vehicle risk distribution and top risk alerts
+- Maintenance capacity and planning
+- Vehicle-specific risk explanations
+- AI-assisted maintenance and policy knowledge retrieval
+
+### 4.2 Technical System Design Video
+
+**Video Link:** [Insert YouTube / Google Drive URL]
+
+The technical demonstration explains the underlying architecture and reasoning mechanisms.
+
+Topics include:
+
+- High-Level System Architecture
+- Machine Learning Prediction
+- Temporal Risk Analysis
+- Rule-Based Maintenance Decision Engine
+- SHAP Explainability
+- FastAPI and PostgreSQL Integration
+- AI Assistant with Qwen Function Calling
+- RAG Knowledge Retrieval using pgvector
+- Dashboard and Chat Execution Sequences
 
 ---
 
-**This [Machine Reasoning (MR)](https://www.iss.nus.edu.sg/executive-education/course/detail/machine-reasoning "Machine Reasoning") course is part of the Analytics and Intelligent Systems and Graduate Certificate in [Intelligent Reasoning Systems (IRS)](https://www.iss.nus.edu.sg/stackable-certificate-programmes/intelligent-systems "Intelligent Reasoning Systems") series offered by [NUS-ISS](https://www.iss.nus.edu.sg "Institute of Systems Science, National University of Singapore").**
+## SECTION 5: USER GUIDE
 
-**Lecturer: [GU Zhan (Sam)](https://www.iss.nus.edu.sg/about-us/staff/detail/201/GU%20Zhan "GU Zhan (Sam)")**
+### 5.1 System Requirements
 
-[![alt text](https://www.iss.nus.edu.sg/images/default-source/About-Us/7.6.1-teaching-staff/sam-website.tmb-.png "Let's check Sam' profile page")](https://www.iss.nus.edu.sg/about-us/staff/detail/201/GU%20Zhan)
+**Recommended Development Environment**
 
-**zhan.gu@nus.edu.sg**
+- Python 3.12
+- Node.js and npm
+- PostgreSQL 16
+- pgvector extension compatible with the installed PostgreSQL version
+- Conda or another Python virtual environment manager
+- Qwen-compatible API credentials
+- Internet access for remote LLM requests
+
+### 5.2 Project Architecture
+
+FleetCareAI follows a modular architecture:
+
+```text
+React Frontend
+    |
+    v
+FastAPI Backend
+    |
+    +-- Dashboard Services
+    |       |
+    |       +-- SQLAlchemy Repositories
+    |               |
+    |               +-- PostgreSQL
+    |
+    +-- AI Assistant
+            |
+            +-- Qwen LLM
+            |
+            +-- Function Calling
+                    |
+                    +-- VehicleAnalysisTool
+                    |       |
+                    |       +-- PostgreSQL
+                    |           (Vehicle Analysis + SHAP)
+                    |
+                    +-- KnowledgeSearchTool
+                            |
+                            +-- Multilingual Embedding
+                            |
+                            +-- pgvector
+                                (Maintenance Knowledge)
+```
+
+### 5.3 Clone the Repository
+
+```bash
+git clone https://github.com/TianQinNus/AIS_Project.git
+cd AIS_Project
+```
+
+### 5.4 Backend Setup
+
+Navigate to the backend directory:
+
+```bash
+cd SystemCode/backend
+```
+
+Create the Conda environment:
+
+```bash
+conda env create -f environment.yml
+conda activate fleetcare
+```
+
+If the environment already exists:
+
+```bash
+conda env update -f environment.yml --prune
+```
+
+### 5.5 PostgreSQL Database Setup
+
+Install and start PostgreSQL 16 on macOS using Homebrew:
+
+```bash
+brew install postgresql@16
+brew services start postgresql@16
+```
+
+Create the database:
+
+```bash
+createdb fleetcare
+```
+
+The project requires the PostgreSQL `vector` extension for RAG knowledge retrieval.
+
+After installing a pgvector build compatible with PostgreSQL 16, enable the extension:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+**Business Database**
+
+The structured database contains vehicle records, model predictions, and SHAP explanations.
+
+Core tables include:
+
+- `truck`
+- `truck_readout`
+- `analysis`
+- `prediction_shap`
+
+Import the supplied PostgreSQL dump, if available:
+
+```bash
+psql -X -v ON_ERROR_STOP=1 \
+  -d fleetcare \
+  -f /path/to/fleetcare.sql
+```
+
+**Important:** The complete business database dump may not be included in GitHub because of file-size restrictions. Obtain the dataset through the project team's designated distribution channel.
+
+Importing a complete SQL dump into an existing database may produce table conflicts. Follow the database reset instructions before restoring a fresh database.
+
+**RAG Knowledge Database**
+
+The knowledge retrieval component uses PostgreSQL and pgvector.
+
+Core knowledge tables include:
+
+- `knowledge_document`
+- `knowledge_chunk`
+
+The knowledge chunks contain source text, metadata, citations, and 384-dimensional embeddings.
+
+If the corresponding setup scripts and seed files are available:
+
+```bash
+psql -X -v ON_ERROR_STOP=1 \
+  -d fleetcare \
+  -f scripts/create_knowledge_tables.sql
+```
+
+```bash
+python -m scripts.import_pgvector_seed \
+  --file data/pgvector_seed.json.gz
+```
+
+Verify the imported knowledge:
+
+```sql
+SELECT COUNT(*)
+FROM public.knowledge_chunk;
+```
+
+The knowledge database must be populated before maintenance knowledge retrieval can function.
+
+### 5.6 Environment Configuration
+
+Create a `.env` file inside `SystemCode/backend`.
+
+Example:
+
+```dotenv
+DATABASE_URL=postgresql+psycopg://YOUR_USER:YOUR_PASSWORD@localhost:5432/fleetcare
+
+DASHSCOPE_API_KEY=YOUR_QWEN_API_KEY
+QWEN_MODEL=qwen3.5-flash
+QWEN_BASE_URL=https://maas.qianwenaiapi.com/compatible-mode/v1
+
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+The environment variable names above should be checked against the final backend configuration before submission.
+
+Do not commit real API keys, passwords, or `.env` files to GitHub.
+
+### 5.7 Start the Backend
+
+From `SystemCode/backend`:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+Default local server:
+
+```text
+http://127.0.0.1:8000
+```
+
+Interactive API documentation:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+### 5.8 Start the Frontend
+
+Open a new terminal:
+
+```bash
+cd SystemCode/fleetcare-frontend
+npm install
+npm run dev
+```
+
+Open the local URL displayed by Vite, typically:
+
+```text
+http://localhost:5173
+```
+
+### 5.9 Using FleetCareAI
+
+**Fleet Dashboard**
+
+The Dashboard provides fleet-level information, including:
+
+- Active vehicles
+- Vehicles at risk
+- Average fleet risk score
+- Maintenance capacity
+- Risk distribution
+- Top risk alerts
+- Maintenance plan summary
+
+**Vehicle Analysis**
+
+Staff can inspect individual vehicle assessments, including prediction results, risk indicators, maintenance priorities, recommended actions, and SHAP explanations.
+
+**AI Assistant**
+
+The AI Assistant supports two primary question types.
+
+*Vehicle Analysis Example:*
+
+> How has vehicle 18734's risk changed recently?
+
+The assistant retrieves stored vehicle analysis data and explains relevant risk indicators, prediction history, and recommended actions.
+
+*Maintenance Knowledge Example:*
+
+> What should I check before driving a heavy goods vehicle?
+
+The assistant retrieves relevant maintenance reference material and provides supporting sources where available.
+
+The assistant is intended for decision support. It does not replace professional vehicle inspection, qualified mechanical diagnosis, or official regulatory advice.
+
+---
+
+## SECTION 6: PROJECT REPORT / PAPER
+
+The full project report is available in the GitHub repository:
+
+**Folder:** `ProjectReport/`
+
+**Report Link:** [Insert final report URL]
+
+### Report Contents
+
+1. Executive Summary
+2. Business Problem Background
+3. Project Objectives and Scope
+4. Literature Review and Related Work
+5. System Architecture and Design
+6. Machine Learning Prediction Models
+7. Temporal Risk Analysis
+8. Rule-Based Maintenance Reasoning
+9. Explainable AI Using SHAP
+10. AI Assistant and Retrieval-Augmented Generation
+11. Frontend and Backend Implementation
+12. Experiments, Testing, and Evaluation
+13. Results and Discussion
+14. System Limitations
+15. Conclusions and Future Improvements
+
+**Appendices**
+
+- Project Proposal
+- Installation and User Guide
+- System Architecture Diagrams
+- API Documentation
+- Evaluation Results
+- Individual Project Contributions and Reflections
+- References
+
+### Evaluation and Validation
+
+FleetCareAI includes evaluation activities covering model prediction, reasoning, knowledge retrieval, and system integration.
+
+The RAG component has undergone an initial ten-question evaluation covering maintenance knowledge, Singapore transport policy, project-specific explanations, and out-of-scope questions.
+
+In the documented retrieval experiment, the eight answerable questions achieved:
+
+- Macro Precision@5: 0.2000
+- Macro Recall@5: 0.78125
+
+These are preliminary retrieval metrics based on a small, initially annotated test set. They are not measures of overall system accuracy or generated-answer correctness.
+
+The reported experiment did not complete real LLM answer generation and human scoring. Further end-to-end validation is required.
+
+Refer to the full evaluation report for experimental methodology, findings, and limitations.
+
+---
+
+## SECTION 7: MISCELLANEOUS
+
+### 7.1 Technology Stack
+
+| Component | Technology |
+|---|---|
+| Frontend | React, TypeScript, Vite |
+| Backend | Python, FastAPI |
+| ORM | SQLAlchemy |
+| Database | PostgreSQL |
+| Vector Database Capability | pgvector extension |
+| AI Assistant | Qwen 3.5 Flash |
+| Agent Integration | Function Calling |
+| Embedding Model | Multilingual MiniLM |
+| Explainability | SHAP |
+| Reasoning | Temporal Analysis and Rule-Based Reasoning |
+| API Documentation | FastAPI Swagger UI |
+| Version Control | Git and GitHub |
+
+### 7.2 Knowledge Sources
+
+The RAG knowledge base includes selected reference materials from:
+
+- UK Driver and Vehicle Standards Agency (DVSA)
+- UK Health and Safety Executive (HSE)
+- Singapore Land Transport Authority (LTA)
+- FleetCareAI Project Rule Documentation
+
+The documents support general maintenance guidance, regulatory reference, and explanations of project-specific reasoning concepts.
+
+UK maintenance guidance is not presented as Singapore law. Policy applicability must be checked against the relevant vehicle type, registration details, and current official requirements.
+
+### 7.3 Key System Design Principles
+
+**Modular Architecture**
+
+The system separates API routing, business services, repositories, and AI tools to support maintenance and extensibility.
+
+**Explainable Reasoning**
+
+Maintenance decisions include rule identifiers, evidence, and explanations. SHAP provides additional insight into model predictions.
+
+**Grounded AI Assistance**
+
+Vehicle-specific information is retrieved from structured database records, while maintenance knowledge is retrieved from relevant reference documents.
+
+**Human-in-the-Loop Decision Support**
+
+The system provides maintenance recommendations and supporting information. Final inspection and repair decisions remain the responsibility of qualified personnel.
+
+### 7.4 Limitations and Future Work
+
+Current limitations include the dependence on available vehicle prediction records, the scope of the reference knowledge base, and the need for further end-to-end evaluation of AI-generated responses.
+
+Potential future enhancements include:
+
+- Expanded maintenance knowledge coverage
+- Improved retrieval relevance and evaluation
+- Multi-turn conversational memory
+- Role-based access control
+- Maintenance workflow and work-order integration
+- Production deployment and monitoring
+- Additional model validation with operational fleet data
+
+---
+
+## Acknowledgements
+
+This project was developed as part of the Intelligent Reasoning Systems coursework at the National University of Singapore, Institute of Systems Science.
+
+We thank the teaching team for their guidance and feedback throughout the project.
+
+---
+
+**FleetCareAI — From Predictive Insights to Explainable Maintenance Decisions.**
