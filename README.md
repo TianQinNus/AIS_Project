@@ -58,7 +58,7 @@ Overall, FleetCareAI demonstrates how machine learning, rule-based reasoning, ex
 
 | Official Full Name | Student ID | Project Contribution |
 |---|---|---|
-| Zhang Tianqin | A0356380B | Developed the machine-learning pipeline, including temporal feature engineering, imbalance handling, model experimentation and tuning, ensemble design, rule-engine integration, SHAP explainability, and production inference. As project leader, managed the overall product functionality, system integration, UI/UX, task allocation, team coordination, meetings, and project timeline. |
+| Zhang Tianqin | A0356380B | Developed the machine-learning pipeline, including temporal feature engineering, imbalance handling, model experimentation and tuning, ensemble design, rule-engine integration, SHAP explainability, and production inference. Designed and implemented the database architecture and table schemas for vehicle data, predictions, explanations, and knowledge retrieval. As project leader, managed the overall product functionality, system integration, UI/UX, task allocation, team coordination, meetings, and project timeline. |
 | Zhang Yuyue | A0305487X | [Confirm specific contributions] |
 | Ma Jialing | A0305478X | Developed React frontend features and FastAPI backend APIs for the Fleet Dashboard and AI assistant. Designed PostgreSQL database integration and implemented fleet risk aggregation, maintenance statistics, and vehicle data retrieval using SQLAlchemy. Integrated Qwen 3.5 Flash with Function Calling and pgvector-based RAG to support vehicle risk explanations and maintenance knowledge queries. Supported frontend–backend integration, API testing, debugging, and system demonstrations. |
 | Gong Yucheng | A0355325E | [Confirm specific contributions] |
