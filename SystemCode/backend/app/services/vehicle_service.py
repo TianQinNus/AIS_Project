@@ -74,7 +74,7 @@ _ACTIONS = {
         "Enhanced Monitor",
         "ENHANCED MONITOR",
         "gold",
-        "Monitor",
+        "Enhanced Monitor",
     ),
     "MONITOR": ActionPresentation(
         "Monitor",

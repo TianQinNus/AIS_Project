@@ -165,6 +165,7 @@ def test_label_mapping():
     assert predicted_state_label("C4") == "C4 · 0–6 units"
     assert history_label("STRONG") == "Strong"
     assert present_action("INSPECT").action_label == "Plan Inspection"
+    assert present_action("ENHANCED_MONITOR").action_label == "Enhanced Monitor"
     assert split_reasons(
         "Risk6 P99.3; Risk12 P95.9; history=5",
         "Extreme Risk6 with persistence or fast deterioration.",
