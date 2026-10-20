@@ -1,4 +1,3 @@
-"""FleetCare inference using only the frozen Test54 C4 ranking ensemble."""
 from __future__ import annotations
 
 import argparse
@@ -6,14 +5,13 @@ import json
 import os
 from pathlib import Path
 from zoneinfo import ZoneInfo
-
+import gc
 import joblib
 import numpy as np
 import pandas as pd
 from sqlalchemy import MetaData, Table, create_engine, delete, func, insert, select, text
 from sqlalchemy.engine import URL
 
-from fleetcare_c4_risk_inference import build_matrix
 
 
 SGT = ZoneInfo("Asia/Singapore")
@@ -46,6 +44,32 @@ def load_final_model(model_dir: Path):
     return models, metadata
 
 
+def detect_groups(columns: list[str], min_size: int = 2, max_size: int = 40):
+    buckets: dict[str, list[int]] = {}
+    for index, column in enumerate(columns):
+        key = str(column).rsplit("_", 1)[0] if "_" in str(column) else str(column)
+        buckets.setdefault(key, []).append(index)
+    histograms = [(key, np.asarray(indices, dtype=int)) for key, indices in buckets.items()
+                  if min_size <= len(indices) <= max_size]
+    used = {index for _, indices in histograms for index in indices}
+    singles = np.asarray([index for index in range(len(columns)) if index not in used], dtype=int)
+    return histograms, singles
+
+
+def vehicle_start(vehicle_ids: np.ndarray) -> np.ndarray:
+    changed = np.r_[True, vehicle_ids[1:] != vehicle_ids[:-1]]
+    starts = np.flatnonzero(changed)
+    return starts[np.cumsum(changed) - 1]
+
+
+def safe_divide(numerator, denominator):
+    a = np.asarray(numerator, dtype=np.float64)
+    b = np.asarray(denominator, dtype=np.float64)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        result = a / b
+    return np.where(np.isfinite(result) & (b > 0), result, np.nan)
+
+
 def make_engine(args):
     kwargs = {"username": args.username, "database": args.database}
     if args.password is not None:
@@ -53,6 +77,78 @@ def make_engine(args):
     if args.host:
         kwargs.update(host=args.host, port=args.port)
     return create_engine(URL.create("postgresql+psycopg2", **kwargs), pool_pre_ping=True)
+
+
+def dynamic_features(op: pd.DataFrame, selected: pd.DataFrame, raw_columns: list[str],
+                     lags: tuple[int, ...]):
+    histograms, singles = detect_groups(raw_columns)
+    values = op[raw_columns].to_numpy(dtype=np.float32)
+    vehicles = op["vehicle_id"].to_numpy()
+    times = op["time_step"].to_numpy(dtype=np.float64)
+    starts = vehicle_start(vehicles)
+    positions = selected["row_id"].to_numpy(dtype=int)
+    current = values[positions].astype(np.float64)
+    current_time = times[positions]
+    age = current_time + 1.0
+    arrays: list[np.ndarray] = []
+    names: list[str] = []
+
+    def add(array, labels):
+        array = np.asarray(array, dtype=np.float32)
+        arrays.append(array[:, None] if array.ndim == 1 else array)
+        names.extend(labels)
+
+    lifetime = safe_divide(current[:, singles], age[:, None])
+    add(lifetime, [f"rate:{raw_columns[index]}" for index in singles])
+    group_totals = {}
+    for key, indices in histograms:
+        total = current[:, indices].sum(axis=1)
+        group_totals[key] = total
+        add(safe_divide(current[:, indices], total[:, None]),
+            [f"prop:{raw_columns[index]}" for index in indices])
+        add(safe_divide(total, age), [f"rate:{key}_total"])
+    for lag in lags:
+        prior = np.maximum(positions - lag, starts[positions])
+        elapsed = current_time - times[prior]
+        difference = current - values[prior].astype(np.float64)
+        difference = np.where(difference < 0, np.nan, difference)
+        recent = safe_divide(difference[:, singles], elapsed[:, None])
+        add(safe_divide(recent, lifetime),
+            [f"ratio{lag}:{raw_columns[index]}" for index in singles])
+        for key, indices in histograms:
+            total_change = difference[:, indices].sum(axis=1)
+            add(safe_divide(difference[:, indices], total_change[:, None]),
+                [f"mix{lag}:{raw_columns[index]}" for index in indices])
+            add(safe_divide(safe_divide(total_change, elapsed),
+                            safe_divide(group_totals[key], age)),
+                [f"ratio{lag}:{key}_total"])
+    del values
+    gc.collect()
+    return np.hstack(arrays).astype(np.float32), names
+
+
+
+
+def specification_features(specifications: pd.DataFrame, vehicle_ids: np.ndarray,
+                           schema: list[str]) -> np.ndarray:
+    if specifications["vehicle_id"].duplicated().any():
+        raise ValueError("Duplicate vehicle_id in specifications")
+    features = specifications.set_index("vehicle_id")
+    categorical = [column for column in features
+                   if not pd.api.types.is_numeric_dtype(features[column])]
+    features = pd.get_dummies(features, columns=categorical, dtype=np.float32)
+    aligned = features.reindex(columns=schema, fill_value=0.0).reindex(vehicle_ids)
+    if aligned.isna().all(axis=1).any():
+        raise ValueError("Missing specification row for one or more vehicles")
+    return aligned.to_numpy(dtype=np.float32)
+
+
+def build_matrix(op: pd.DataFrame, selected: pd.DataFrame, specifications: pd.DataFrame,
+                 schema: list[str], raw_columns: list[str], lags=(1, 3, 5)):
+    dynamic, names = dynamic_features(op, selected, raw_columns, tuple(lags))
+    static = specification_features(specifications, selected["vehicle_id"].to_numpy(), schema)
+    feature_names = names + [f"spec:{column}" for column in schema]
+    return np.hstack([dynamic, static]).astype(np.float32), feature_names
 
 
 def load_active_fleet(engine, metadata):
@@ -424,12 +520,12 @@ def main() -> None:
     parser.add_argument(
         "--model-dir",
         type=Path,
-        default=script_dir / "processed" / "final_model_test54",
+        default=script_dir / "final_model_test54",
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=script_dir / "processed" / "final_test54_six_day_inference",
+        default=script_dir /  "final_test54_six_day_inference",
     )
     parser.add_argument("--prediction-at", default=None)
     parser.add_argument("--history-days", type=int, default=1)
