@@ -25,7 +25,11 @@ The system integrates machine learning, temporal risk analysis, rule-based reaso
 - Maintenance Plan Summary
 - AI Assistant for Vehicle Analysis and Maintenance Knowledge
 
-*Project screenshot: Add `SystemCode/screenshots/dashboard.png` after placing the actual screenshot in the repository.*
+<img width="1432" height="810" alt="Screenshot 2026-10-20 at 5 23 49 PM" src="https://github.com/user-attachments/assets/9f09e543-c782-4502-93de-eb386263cd94" />
+<img width="1440" height="812" alt="Screenshot 2026-10-20 at 5 25 34 PM" src="https://github.com/user-attachments/assets/76a5313d-3ec7-4406-b0a7-a5fb7d7b999f" />
+<img width="1435" height="808" alt="Screenshot 2026-10-20 at 5 24 48 PM" src="https://github.com/user-attachments/assets/e24e775f-fd52-4bac-b879-507ebaac3fdc" />
+<img width="1424" height="814" alt="Screenshot 2026-10-20 at 5 25 09 PM" src="https://github.com/user-attachments/assets/8a02b29d-788a-4f1d-bc7f-e78b5ccab07f" />
+
 
 ---
 
@@ -55,7 +59,7 @@ Overall, FleetCareAI demonstrates how machine learning, rule-based reasoning, ex
 
 | Official Full Name | Student ID | Project Contribution |
 |---|---|---|
-| Zhang Tianqin | A0356380B | [Confirm specific contributions] |
+| Zhang Tianqin | A0356380B | Developed the machine-learning pipeline, including temporal feature engineering, imbalance handling, model experimentation and tuning, ensemble design, rule-engine integration, SHAP explainability, and production inference. As project leader, managed the overall product functionality, system integration, UI/UX, task allocation, team coordination, meetings, and project timeline. |
 | Zhang Yuyue | A0305487X | [Confirm specific contributions] |
 | Ma Jialing | A0305478X | Developed React frontend features and FastAPI backend APIs for the Fleet Dashboard and AI assistant. Designed PostgreSQL database integration and implemented fleet risk aggregation, maintenance statistics, and vehicle data retrieval using SQLAlchemy. Integrated Qwen 3.5 Flash with Function Calling and pgvector-based RAG to support vehicle risk explanations and maintenance knowledge queries. Supported frontend–backend integration, API testing, debugging, and system demonstrations. |
 | Gong Yucheng | A0355325E | [Confirm specific contributions] |
