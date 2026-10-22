@@ -238,18 +238,41 @@ After installing a pgvector build compatible with PostgreSQL 16, enable the exte
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-**Business Database**
+### Business Database
 
-The structured database contains vehicle records, model predictions, and SHAP explanations.
+The FleetCare business database stores vehicle records, operational readouts,
+model assessments, rule-engine decisions, and SHAP explanations.
 
-Core tables include:
+The core tables are:
 
-- `truck`
-- `truck_readout`
-- `analysis`
-- `prediction_shap`
+- `public.truck`
+- `public.truck_readout`
+- `public.analysis`
+- `public.prediction_shap`
 
-Import the supplied PostgreSQL dump, if available:
+#### Step 1: Download the Database Dump
+
+Download the PostgreSQL database dump using the link below:
+
+**[Download `fleetcare.sql`](https://drive.google.com/file/d/1JMNy12i5nmPfxsfILchxve5c9CMH4eAA/view?usp=sharing)**
+
+The downloaded file can remain in your Downloads folder. It does not need to be
+copied into the GitHub repository.
+
+#### Step 2: Create the Database
+
+If the `fleetcare` database does not already exist, create it:
+
+```bash
+createdb fleetcare
+```
+
+If the database already exists and is empty, skip this step.
+
+#### Step 3: Import the Database Dump
+
+Replace `/path/to/fleetcare.sql` with the actual location of the downloaded
+file:
 
 ```bash
 psql -X -v ON_ERROR_STOP=1 \
@@ -257,10 +280,40 @@ psql -X -v ON_ERROR_STOP=1 \
   -f /path/to/fleetcare.sql
 ```
 
-Please download the entire PostgreSQL database using the below link:
+For example, on macOS:
+
 ```bash
-https://drive.google.com/file/d/1JMNy12i5nmPfxsfILchxve5c9CMH4eAA/view?usp=sharing
+psql -X -v ON_ERROR_STOP=1 \
+  -d fleetcare \
+  -f ~/Downloads/fleetcare.sql
 ```
+
+This command reads the downloaded SQL file, creates the FleetCare tables, and
+imports the stored data into PostgreSQL.
+
+> **Important:** Importing the dump into a database that already contains the
+> FleetCare tables may produce table conflicts. Follow the database reset
+> instructions before importing a fresh copy.
+
+#### Step 4: Verify the Import
+
+Check that the vehicle data were imported successfully:
+
+```bash
+psql -d fleetcare -c \
+  "SELECT COUNT(*) AS vehicles FROM public.truck;"
+```
+
+You can also list the imported tables:
+
+```bash
+psql -d fleetcare -c "\dt public.*"
+```
+
+The business database dump does not include the RAG knowledge tables. Follow the
+separate RAG Knowledge Database instructions to create and populate
+`public.knowledge_document` and `public.knowledge_chunk`.
+
 **RAG Knowledge Database**
 
 The knowledge retrieval component uses PostgreSQL and pgvector.
