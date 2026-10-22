@@ -122,7 +122,7 @@ FleetCareAI includes two video presentations covering the product experience and
 
 ### 4.1 Product Demonstration Video
 
-[![Watch the FleetCare AI Product Demonstration](INSERT_PRODUCT_THUMBNAIL_URL)](INSERT_PRODUCT_VIDEO_URL)
+[![Watch the FleetCare AI Product Demonstration](https://img.youtube.com/vi/Ez5NU5i7x94/hqdefault.jpg)](https://youtu.be/Ez5NU5i7x94)
 
 The product demonstration presents FleetCare AI from the perspective of fleet
 managers and maintenance staff, including fleet monitoring, maintenance
