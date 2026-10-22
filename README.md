@@ -1,3 +1,4 @@
+<img width="1078" height="607" alt="Screenshot 2026-10-22 at 7 06 21 PM" src="https://github.com/user-attachments/assets/1c1c2d14-b553-40c0-b36f-a87a50427fdf" />
 ﻿# FleetCareAI — Intelligent Fleet Maintenance Decision Support System
 
 **Course:** Intelligent Reasoning Systems (IRS)  
@@ -122,7 +123,8 @@ FleetCareAI includes two video presentations covering the product experience and
 
 ### 4.1 Product Demonstration Video
 
-[![Watch the FleetCare AI Product Demonstration](https://img.youtube.com/vi/Ez5NU5i7x94/hqdefault.jpg)](https://youtu.be/Ez5NU5i7x94)
+[![Watch the FleetCare AI Product Demonstration](<img width="1070" height="598" alt="Screenshot 2026-10-22 at 7 06 38 PM" src="https://github.com/user-attachments/assets/01a74471-a53a-42ee-959b-eab26ccdf1ad" />
+)](https://youtu.be/Ez5NU5i7x94)
 
 The product demonstration presents FleetCare AI from the perspective of fleet
 managers and maintenance staff, including fleet monitoring, maintenance
@@ -130,7 +132,8 @@ planning, vehicle-level explanations, and AI-assisted knowledge retrieval.
 
 ### 4.2 Technical System Design Video
 
-[![Watch the FleetCare AI Technical Walkthrough](https://img.youtube.com/vi/pnvF9ENN-2Q/hqdefault.jpg)](https://youtu.be/pnvF9ENN-2Q)
+[![Watch the FleetCare AI Technical Walkthrough](<img width="1002" height="564" alt="Screenshot 2026-10-22 at 7 07 57 PM" src="https://github.com/user-attachments/assets/e5c3343f-7d9a-4591-8717-ddd2e7a6efb3" />
+)](https://youtu.be/pnvF9ENN-2Q)
 
 The technical walkthrough explains the system architecture, predictive models,
 temporal rule engine, SHAP explainability, PostgreSQL and FastAPI integration,
