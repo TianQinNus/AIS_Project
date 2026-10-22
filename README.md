@@ -89,35 +89,20 @@ FleetCareAI includes two video presentations covering the product experience and
 
 ### 4.1 Product Demonstration Video
 
-**Video Link:** [Insert YouTube / Google Drive URL]
+[![Watch the FleetCare AI Product Demonstration](INSERT_PRODUCT_THUMBNAIL_URL)](INSERT_PRODUCT_VIDEO_URL)
 
-The product demonstration presents FleetCare AI from the perspective of fleet managers and maintenance staff.
-
-It demonstrates:
-
-- Fleet-wide monitoring through the dashboard
-- Vehicle risk distribution and top-risk alerts
-- Maintenance capacity and inspection planning
-- Vehicle-specific risk assessments and explanations
-- AI-assisted retrieval of vehicle assessments, maintenance guidance, and policy knowledge
+The product demonstration presents FleetCare AI from the perspective of fleet
+managers and maintenance staff, including fleet monitoring, maintenance
+planning, vehicle-level explanations, and AI-assisted knowledge retrieval.
 
 ### 4.2 Technical System Design Video
 
-**Video Link:** https://youtu.be/pnvF9ENN-2Q
+[![Watch the FleetCare AI Technical Walkthrough](https://img.youtube.com/vi/pnvF9ENN-2Q/hqdefault.jpg)](https://youtu.be/pnvF9ENN-2Q)
 
-The technical demonstration explains the system architecture and its underlying prediction and reasoning mechanisms.
-
-Topics include:
-
-- High-level system architecture
-- Predictive model implementation and evaluation
-- Temporal feature engineering and risk analysis
-- Rule-based maintenance decision engine
-- SHAP-based model explainability
-- FastAPI and PostgreSQL integration
-- AI assistant with Qwen function calling
-- RAG knowledge retrieval using pgvector
-- Dashboard and assistant execution sequences
+The technical walkthrough explains the system architecture, predictive models,
+temporal rule engine, SHAP explainability, PostgreSQL and FastAPI integration,
+Qwen Function Calling, RAG knowledge retrieval, and application execution
+sequences.
 
 
 ## SECTION 5: USER GUIDE
