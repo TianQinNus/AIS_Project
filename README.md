@@ -122,8 +122,13 @@ FleetCareAI includes two video presentations covering the product experience and
 
 ### 4.1 Product Demonstration Video
 
-[![Watch the FleetCare AI Product Demonstration](<img width="1070" height="598" alt="Screenshot 2026-10-22 at 7 06 38 PM" src="https://github.com/user-attachments/assets/01a74471-a53a-42ee-959b-eab26ccdf1ad" />
-)](https://youtu.be/Ez5NU5i7x94)
+<a href="https://youtu.be/Ez5NU5i7x94">
+  <img
+    src="https://github.com/user-attachments/assets/a0923621-f67a-408a-80ae-72742e5ec27a"
+    alt="Watch the FleetCare AI Product Demonstration"
+    width="600"
+  >
+</a>
 
 The product demonstration presents FleetCare AI from the perspective of fleet
 managers and maintenance staff, including fleet monitoring, maintenance
@@ -131,8 +136,13 @@ planning, vehicle-level explanations, and AI-assisted knowledge retrieval.
 
 ### 4.2 Technical System Design Video
 
-[![Watch the FleetCare AI Technical Walkthrough](<img width="1002" height="564" alt="Screenshot 2026-10-22 at 7 07 57 PM" src="https://github.com/user-attachments/assets/e5c3343f-7d9a-4591-8717-ddd2e7a6efb3" />
-)](https://youtu.be/pnvF9ENN-2Q)
+<a href="https://youtu.be/pnvF9ENN-2Q">
+  <img
+    src="https://github.com/user-attachments/assets/65de5173-4420-4cad-9121-91a4677b1c6e"
+    alt="Watch the FleetCare AI Technical Walkthrough"
+    width="600"
+  >
+</a>
 
 The technical walkthrough explains the system architecture, predictive models,
 temporal rule engine, SHAP explainability, PostgreSQL and FastAPI integration,
