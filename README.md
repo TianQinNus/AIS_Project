@@ -6,67 +6,100 @@
 **Institution:** National University of Singapore — Institute of Systems Science (NUS-ISS)
 
 ---
-
 ## SECTION 1: PROJECT TITLE
 
-# FleetCareAI — Intelligent Fleet Maintenance Decision Support System
+# FleetCare AI — Intelligent Fleet Maintenance Decision-Support System
 
-**Predict Risks. Explain Decisions. Support Maintenance.**
+**Predict Risk. Explain Decisions. Prioritise Maintenance.**
 
-FleetCareAI is an AI-powered fleet maintenance decision support platform designed to help fleet managers and maintenance staff identify high-risk vehicles, understand predictive maintenance recommendations, and access relevant maintenance knowledge.
+FleetCare AI is an intelligent fleet-maintenance platform that helps fleet
+managers and maintenance personnel identify high-risk vehicles, prioritise
+limited inspection capacity, understand predictive results, and retrieve
+relevant maintenance knowledge.
 
-The system integrates machine learning, temporal risk analysis, rule-based reasoning, explainable AI, and retrieval-augmented generation (RAG) into a unified web application.
+The system integrates machine learning, temporal analysis, rule-based
+reasoning, SHAP explainability, and retrieval-augmented generation into a
+unified web application.
 
-**Core Features**
+### Core Features
 
-- Fleet Dashboard and Risk Monitoring
-- Vehicle Risk Analysis and Prediction History
-- Explainable Maintenance Recommendations
-- Maintenance Plan Summary
-- AI Assistant for Vehicle Analysis and Maintenance Knowledge
-
-## 🎬 Product Demonstration
-
-FleetCare AI is an intelligent predictive maintenance
-decision-support system designed to help fleet managers
-identify high-risk vehicles and prioritise inspections.
-
-[![Watch FleetCare AI Demo](https://github.com/user-attachments/assets/9f09e543-c782-4502-93de-eb386263cd94)](YOUR_VIDEO_URL)
-
-Click the image to watch our 5-minute product demonstration.
+- Fleet-wide risk monitoring and prioritisation
+- Vehicle-level risk analysis and prediction history
+- Rule-based maintenance actions with traceable evidence
+- SHAP-based model explanations
+- Maintenance-capacity and inspection-planning summaries
+- AI-assisted retrieval of vehicle assessments and maintenance knowledge
 
 ---
 
-## SECTION 2: EXECUTIVE SUMMARY / PAPER ABSTRACT
+## SECTION 2: EXECUTIVE SUMMARY
 
-Commercial fleet maintenance is essential for ensuring vehicle reliability, operational efficiency, and road safety. Traditional maintenance processes often depend on scheduled inspections, manual monitoring, and fragmented maintenance records. These approaches may make it difficult for fleet operators to identify emerging risks, prioritise maintenance activities, and interpret complex vehicle data efficiently.
+Commercial vehicle fleets generate large volumes of operational data, but
+turning that data into timely maintenance decisions remains challenging.
+Scheduled inspections and manual monitoring may not adequately distinguish
+between vehicles with different operating histories, changing conditions, and
+levels of near-term maintenance risk. Fleet operators must determine not only
+which vehicles appear risky, but also which vehicles should be reviewed first,
+whether the available evidence is stable, and why a particular action has been
+recommended.
 
-FleetCareAI aims to address these challenges by providing an intelligent fleet maintenance decision support system that combines predictive analytics with explainable reasoning and AI-assisted knowledge retrieval.
+FleetCare AI addresses this problem through an integrated, human-in-the-loop
+decision-support workflow.
 
-The system uses machine learning models to assess vehicle conditions and generate risk scores across multiple prediction horizons. A temporal reasoning component examines historical predictions, risk persistence, and deterioration indicators to provide additional context for vehicle risk assessments.
+The predictive engine transforms cumulative operational readouts and vehicle
+specifications into 534 exposure-normalised and temporal features. A specialist
+XGBoost–LightGBM ensemble ranks active vehicles by near-term C4 risk, representing
+the final zero-to-six-unit period before a recorded maintenance event. A separate
+five-class XGBoost model provides the displayed C0–C4 maintenance stage and
+coherent Risk6, Risk12, Risk24, and Risk48 probabilities.
 
-A rule-based reasoning engine then translates these assessments into maintenance priorities and recommended actions. Each decision includes supporting evidence and explanations, helping users understand why a particular vehicle requires inspection, enhanced monitoring, or continued operation.
+An ordered temporal rule engine converts predictive evidence into operational
+actions ranging from `CONTINUE` to `PRIORITY_INSPECT`. The rules consider fleet
+risk percentiles, recent persistence, deterioration, disagreement between the
+specialist models, and the availability of sufficient prediction history.
+Unstable assessments are routed to `MANUAL_REVIEW`, while vehicles with
+insufficient data receive `COLLECT_MORE_DATA`.
 
-To improve interpretability, the system incorporates SHAP-based explanations that identify important feature contributions to model predictions. These explanations support model transparency but do not constitute confirmed mechanical fault diagnoses.
+Each assessment is stored in PostgreSQL with its predicted state, risk values,
+fleet percentile, matched rule, action reason, temporal evidence, and strongest
+SHAP contributions. SHAP explains which anonymised features influenced the C4
+XGBoost component, while the rule trace explains why the final operational
+action was assigned. These explanations support prioritisation and model
+review; they do not constitute confirmed mechanical diagnoses.
 
-FleetCareAI also provides an interactive web-based Dashboard. Fleet managers and maintenance staff can monitor fleet-wide risk distribution, identify high-priority vehicles, review maintenance capacity, and organise inspection activities based on recommended actions.
+The React dashboard provides fleet-level risk summaries, maintenance-planning
+indicators, high-priority alerts, and vehicle-level assessment pages. Users can
+review current probabilities, historical C4 rankings, model explanations, rule
+evidence, and recommended actions.
 
-In addition, an AI Assistant powered by Qwen supports natural-language interactions. Through Function Calling, the assistant can retrieve vehicle-specific predictions and analysis results from PostgreSQL. It also integrates retrieval-augmented generation using multilingual embeddings and pgvector to retrieve relevant maintenance guidance, project knowledge, and Singapore transport policy references.
+FleetCare AI also includes a Qwen-powered assistant with Function Calling. For
+vehicle-specific questions, the assistant retrieves stored predictions,
+actions, histories, and SHAP evidence from PostgreSQL. For maintenance, policy,
+and project questions, it searches a curated knowledge base using multilingual
+embeddings and pgvector. Retrieved passages retain their citation and
+applicability metadata to support evidence-grounded responses.
 
-The system is developed using React, FastAPI, SQLAlchemy, PostgreSQL, pgvector, and Qwen. Its modular architecture separates the presentation layer, business logic, AI orchestration, and data access, supporting maintainability and future extension.
+The system is implemented using React, FastAPI, SQLAlchemy, PostgreSQL,
+pgvector, XGBoost, LightGBM, SHAP, and Qwen. Its modular architecture separates
+prediction, operational reasoning, data persistence, application services, and
+user interaction.
 
-Overall, FleetCareAI demonstrates how machine learning, rule-based reasoning, explainable AI, and knowledge-grounded assistance can be integrated to support more informed fleet maintenance decisions.
+Overall, FleetCare AI demonstrates how predictive modelling, explicit temporal
+reasoning, explainability, and knowledge retrieval can be combined to support
+transparent fleet-maintenance prioritisation. The system supports professional
+judgement and inspection planning; it does not autonomously diagnose faults or
+authorise maintenance.
 
 ---
 
-## SECTION 3: CREDITS / PROJECT CONTRIBUTION
+## SECTION 3: PROJECT CONTRIBUTION
 
 | Official Full Name | Student ID | Project Contribution |
 |---|---|---|
-| Zhang Tianqin | A0356380B | Developed the machine-learning pipeline, including temporal feature engineering, imbalance handling, model experimentation and tuning, ensemble design, rule-engine integration, SHAP explainability, and production inference. Designed and implemented the database architecture and table schemas for vehicle data, predictions, explanations, and knowledge retrieval. As project leader, managed the overall product functionality, system integration, UI/UX, task allocation, team coordination, meetings, and project timeline. |
+| Zhang Tianqin | A0356380B | Developed the machine-learning pipeline, including temporal feature engineering, imbalance handling, model experimentation and tuning, ensemble design, rule-engine integration, SHAP explainability, and production inference. Designed the database architecture and table schemas for vehicle data, predictions, explanations, and knowledge retrieval. Built the initial RAG prototype and vehicle data-retrieval tool functions, and contributed to frontend and backend improvements. As project leader, managed overall product functionality, system integration, UI/UX, task allocation, team coordination, meetings, and the project timeline.|
 | Zhang Yuyue | A0305487X | Developed the React vehicle analysis screens and the FastAPI backend behind them. The frontend covers vehicle search and action filtering, maintenance status, time-window risk readings, the risk-over-time chart, and action explanations with supporting evidence. Implemented the matching endpoints, SQLAlchemy repositories, and service logic, including operational risk curves that assign each readout a calendar time and a predicted risk window. Ordered maintenance actions by current fleet urgency and added API tests for vehicle queries, risk history, and action explanations. |
 | Ma Jialing | A0305478X | Designed and established the React frontend and FastAPI backend architecture, adopting a modular API–Service–Repository structure. Developed React frontend features and FastAPI backend APIs for the Fleet Dashboard and AI assistant. Designed PostgreSQL database integration and implemented fleet risk aggregation, maintenance statistics, and vehicle data retrieval using SQLAlchemy. Integrated Qwen 3.5 Flash with Function Calling and pgvector-based RAG to support vehicle risk explanations and maintenance knowledge queries. Supported frontend–backend integration, API testing, debugging, and system demonstrations. |
-| Gong Yucheng | A0355325E | [Confirm specific contributions] |
+| Gong Yucheng | A0355325E | Contributed to the initial project idea, business use cases, and refinement of the FleetCareAI solution. Co-developed the predictive maintenance models through data exploration, temporal feature engineering, model implementation, comparative experiments, tuning, and evaluation. Built the RAG knowledge base using official maintenance guidance, Singapore transport policy references, and project documentation; implemented document processing, multilingual embeddings, hybrid retrieval, and source citations, and migrated knowledge storage to PostgreSQL with pgvector. Prepared deployment instructions and interface documentation to support integration by the web team.
 
 **Project Workstreams**
 
@@ -82,7 +115,6 @@ The project includes the following major workstreams:
 
 The final contribution table should specify each member's actual responsibilities and deliverables.
 
----
 
 ## SECTION 4: VIDEO OF SYSTEM MODELLING & USE CASE DEMO
 
@@ -90,37 +122,33 @@ FleetCareAI includes two video presentations covering the product experience and
 
 ### 4.1 Product Demonstration Video
 
-**Video Link:** [Insert YouTube / Google Drive URL]
+<a href="https://youtu.be/Ez5NU5i7x94">
+  <img
+    src="https://github.com/user-attachments/assets/a0923621-f67a-408a-80ae-72742e5ec27a"
+    alt="Watch the FleetCare AI Product Demonstration"
+    width="600"
+  >
+</a>
 
-The product demonstration introduces FleetCareAI from the perspective of fleet managers and maintenance staff.
-
-It demonstrates:
-
-- Fleet-wide monitoring through the Dashboard
-- Vehicle risk distribution and top risk alerts
-- Maintenance capacity and planning
-- Vehicle-specific risk explanations
-- AI-assisted maintenance and policy knowledge retrieval
+The product demonstration presents FleetCare AI from the perspective of fleet
+managers and maintenance staff, including fleet monitoring, maintenance
+planning, vehicle-level explanations, and AI-assisted knowledge retrieval.
 
 ### 4.2 Technical System Design Video
 
-**Video Link:** [Insert YouTube / Google Drive URL]
+<a href="https://youtu.be/pnvF9ENN-2Q">
+  <img
+    src="https://github.com/user-attachments/assets/65de5173-4420-4cad-9121-91a4677b1c6e"
+    alt="Watch the FleetCare AI Technical Walkthrough"
+    width="600"
+  >
+</a>
 
-The technical demonstration explains the underlying architecture and reasoning mechanisms.
+The technical walkthrough explains the system architecture, predictive models,
+temporal rule engine, SHAP explainability, PostgreSQL and FastAPI integration,
+Qwen Function Calling, RAG knowledge retrieval, and application execution
+sequences.
 
-Topics include:
-
-- High-Level System Architecture
-- Machine Learning Prediction
-- Temporal Risk Analysis
-- Rule-Based Maintenance Decision Engine
-- SHAP Explainability
-- FastAPI and PostgreSQL Integration
-- AI Assistant with Qwen Function Calling
-- RAG Knowledge Retrieval using pgvector
-- Dashboard and Chat Execution Sequences
-
----
 
 ## SECTION 5: USER GUIDE
 
@@ -222,18 +250,41 @@ After installing a pgvector build compatible with PostgreSQL 16, enable the exte
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-**Business Database**
+### Business Database
 
-The structured database contains vehicle records, model predictions, and SHAP explanations.
+The FleetCare business database stores vehicle records, operational readouts,
+model assessments, rule-engine decisions, and SHAP explanations.
 
-Core tables include:
+The core tables are:
 
-- `truck`
-- `truck_readout`
-- `analysis`
-- `prediction_shap`
+- `public.truck`
+- `public.truck_readout`
+- `public.analysis`
+- `public.prediction_shap`
 
-Import the supplied PostgreSQL dump, if available:
+#### Step 1: Download the Database Dump
+
+Download the PostgreSQL database dump using the link below:
+
+**[Download `fleetcare.sql`](https://drive.google.com/file/d/1JMNy12i5nmPfxsfILchxve5c9CMH4eAA/view?usp=sharing)**
+
+The downloaded file can remain in your Downloads folder. It does not need to be
+copied into the GitHub repository.
+
+#### Step 2: Create the Database
+
+If the `fleetcare` database does not already exist, create it:
+
+```bash
+createdb fleetcare
+```
+
+If the database already exists and is empty, skip this step.
+
+#### Step 3: Import the Database Dump
+
+Replace `/path/to/fleetcare.sql` with the actual location of the downloaded
+file:
 
 ```bash
 psql -X -v ON_ERROR_STOP=1 \
@@ -241,9 +292,39 @@ psql -X -v ON_ERROR_STOP=1 \
   -f /path/to/fleetcare.sql
 ```
 
-**Important:** The complete business database dump may not be included in GitHub because of file-size restrictions. Obtain the dataset through the project team's designated distribution channel.
+For example, on macOS:
 
-Importing a complete SQL dump into an existing database may produce table conflicts. Follow the database reset instructions before restoring a fresh database.
+```bash
+psql -X -v ON_ERROR_STOP=1 \
+  -d fleetcare \
+  -f ~/Downloads/fleetcare.sql
+```
+
+This command reads the downloaded SQL file, creates the FleetCare tables, and
+imports the stored data into PostgreSQL.
+
+> **Important:** Importing the dump into a database that already contains the
+> FleetCare tables may produce table conflicts. Follow the database reset
+> instructions before importing a fresh copy.
+
+#### Step 4: Verify the Import
+
+Check that the vehicle data were imported successfully:
+
+```bash
+psql -d fleetcare -c \
+  "SELECT COUNT(*) AS vehicles FROM public.truck;"
+```
+
+You can also list the imported tables:
+
+```bash
+psql -d fleetcare -c "\dt public.*"
+```
+
+The business database dump does not include the RAG knowledge tables. Follow the
+separate RAG Knowledge Database instructions to create and populate
+`public.knowledge_document` and `public.knowledge_chunk`.
 
 **RAG Knowledge Database**
 
@@ -278,7 +359,83 @@ FROM public.knowledge_chunk;
 
 The knowledge database must be populated before maintenance knowledge retrieval can function.
 
-### 5.6 Environment Configuration
+
+### 5.6 Embedding Model Setup
+
+FleetCareAI uses the `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` model to generate 384-dimensional embeddings for semantic knowledge retrieval.
+
+The model weights are not included in the GitHub repository and must be downloaded separately before using the AI Assistant's RAG functionality.
+
+#### Step 1: Navigate to the Backend Directory
+
+```bash
+cd SystemCode/backend
+```
+
+#### Step 2: Download the Embedding Model
+
+Ensure that `sentence-transformers` is installed:
+
+```bash
+python -m pip install sentence-transformers
+```
+
+Download the model and save it to the expected local directory:
+
+```bash
+python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); model.save('models/multilingual-minilm')"
+```
+
+An internet connection is required for the initial download.
+
+#### Step 3: Verify the Model Directory
+
+After downloading, the directory structure should resemble:
+
+```text
+SystemCode/
+└── backend/
+    ├── app/
+    ├── models/
+    │   └── multilingual-minilm/
+    │       ├── config.json
+    │       ├── modules.json
+    │       ├── model.safetensors
+    │       ├── tokenizer.json
+    │       └── ...
+    ├── scripts/
+    └── environment.yml
+```
+
+The exact files may vary depending on the model version.
+
+#### Step 4: Verify the Embedding Model
+
+From the backend directory, run:
+
+```bash
+python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('models/multilingual-minilm', local_files_only=True); print('Embedding dimension:', model.get_sentence_embedding_dimension())"
+```
+
+Expected output:
+
+```text
+Embedding dimension: 384
+```
+
+#### Important Notes
+
+- The embedding model is required for `KnowledgeSearchTool`.
+- The model must be available locally before starting knowledge retrieval.
+- The backend embedding provider must point to `models/multilingual-minilm`.
+- Query embeddings must use the same model as the precomputed document embeddings.
+- The model weights are not tracked in Git due to their size.
+- The PostgreSQL knowledge tables and pgvector embeddings must also be imported separately.
+
+Without the embedding model, the Fleet Dashboard and structured vehicle APIs may still function, but RAG-based maintenance and policy retrieval will be unavailable.
+
+
+### 5.7 Environment Configuration
 
 Create a `.env` file inside `SystemCode/backend`.
 
@@ -296,9 +453,8 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 
 The environment variable names above should be checked against the final backend configuration before submission.
 
-Do not commit real API keys, passwords, or `.env` files to GitHub.
 
-### 5.7 Start the Backend
+### 5.8 Start the Backend
 
 From `SystemCode/backend`:
 
@@ -318,7 +474,7 @@ Interactive API documentation:
 http://127.0.0.1:8000/docs
 ```
 
-### 5.8 Start the Frontend
+### 5.9 Start the Frontend
 
 Open a new terminal:
 
@@ -334,7 +490,7 @@ Open the local URL displayed by Vite, typically:
 http://localhost:5173
 ```
 
-### 5.9 Using FleetCareAI
+### 5.10 Using FleetCareAI
 
 **Fleet Dashboard**
 
@@ -370,11 +526,10 @@ The assistant retrieves relevant maintenance reference material and provides sup
 
 The assistant is intended for decision support. It does not replace professional vehicle inspection, qualified mechanical diagnosis, or official regulatory advice.
 
----
 
-## SECTION 6: PROJECT REPORT / PAPER
+## SECTION 6: PROJECT REPORT
 
-The full project report is available in the GitHub repository:
+The full FleetCare AI project report is available in the GitHub repository.
 
 **Folder:** `ProjectReport/`
 
@@ -382,50 +537,94 @@ The full project report is available in the GitHub repository:
 
 ### Report Contents
 
-1. Executive Summary
-2. Business Problem Background
-3. Project Objectives and Scope
-4. Literature Review and Related Work
+1. Introduction
+2. Project Background and Commercial Context
+3. Project Scope and Limitations
+4. Data Collection and Preparation
 5. System Architecture and Design
-6. Machine Learning Prediction Models
-7. Temporal Risk Analysis
-8. Rule-Based Maintenance Reasoning
-9. Explainable AI Using SHAP
-10. AI Assistant and Retrieval-Augmented Generation
-11. Frontend and Backend Implementation
-12. Experiments, Testing, and Evaluation
-13. Results and Discussion
-14. System Limitations
-15. Conclusions and Future Improvements
-
-**Appendices**
-
-- Project Proposal
-- Installation and User Guide
-- System Architecture Diagrams
-- API Documentation
-- Evaluation Results
-- Individual Project Contributions and Reflections
-- References
+6. Predictive Model Implementation and Evaluation
+7. Temporal Rule-Based Reasoning
+8. Inference, Database Persistence, and SHAP Explainability
+9. RAG-Based Assistant
+10. Frontend and Backend Application
+11. Predictive-Modelling Experiments
+12. RAG and System-Integration Evaluation
+13. Future Work
+14. Appendices and Installation Guide
 
 ### Evaluation and Validation
 
-FleetCareAI includes evaluation activities covering model prediction, reasoning, knowledge retrieval, and system integration.
+FleetCare AI was evaluated across four connected areas: predictive modelling,
+rule-based reasoning, knowledge retrieval, and application integration.
 
-The RAG component has undergone an initial ten-question evaluation covering maintenance knowledge, Singapore transport policy, project-specific explanations, and out-of-scope questions.
+#### Predictive-Model Evaluation
 
-In the documented retrieval experiment, the eight answerable questions achieved:
+The final C4 ranking ensemble was evaluated on the official Test split,
+containing 5,045 vehicles and 60 C4 cases.
 
-- Macro Precision@5: 0.2000
-- Macro Recall@5: 0.78125
+At a fixed Top-5% inspection capacity:
 
-These are preliminary retrieval metrics based on a small, initially annotated test set. They are not measures of overall system accuracy or generated-answer correctness.
+- C4 vehicles identified: 20 of 60
+- Precision at Top 5%: 7.91%
+- Recall at Top 5%: 33.33%
+- Average Precision: 0.0552
+- ROC–AUC: 0.7907
 
-The reported experiment did not complete real LLM answer generation and human scoring. Further end-to-end validation is required.
+The original five-class baseline identified four C4 vehicles within the same
+Top-5% capacity. These results evaluate fleet prioritisation rather than
+confirmed fault diagnosis.
 
-Refer to the full evaluation report for experimental methodology, findings, and limitations.
+#### Rule-Engine Evaluation
 
----
+The rule engine was evaluated using stored prediction histories and the final
+C4 rankings. The model-defined Top-5% queue contained 253 vehicles and identified
+20 C4 cases.
+
+The additional TR2B rescue rule selected 22 vehicles outside this queue and
+identified two additional C4 cases. The resulting 275-vehicle inspection scope
+contained 22 C4 cases, corresponding to 8.00% precision and 36.67% recall.
+
+Selecting the next 22 vehicles directly from the model ranking produced the same
+number of C4 cases. TR2B therefore provides a transparent deterioration-based
+escalation condition, but does not demonstrate an equal-capacity improvement
+over direct model ranking.
+
+#### RAG Evaluation
+
+The assistant was evaluated using ten document questions and three synthetic
+vehicle-assessment cases. The document set included eight answerable questions
+and two boundary cases covering unavailable OEM information and an
+out-of-domain request.
+
+Controlled knowledge retrieval achieved:
+
+- Macro Precision@5: 0.175
+- Macro Recall@5: 0.5313
+
+The integrated assistant achieved:
+
+- Macro Precision@5: 0.150
+- Macro Recall@5: 0.4063
+- Mean automated response score: 5.40/8
+- Mean response time: 4.40 seconds
+
+When retrieved evidence was supplied directly to the language model,
+fixed-evidence generation achieved a mean automated score of 7.60/8.
+
+All three synthetic vehicle cases produced the expected tool calls and stored
+assessment fields, with a mean automated response score of 7.33/8. HTTP checks
+also verified the health endpoint, request validation, and vehicle-assessment
+chat workflow.
+
+These results are based on a small local evaluation set and automated scoring.
+They demonstrate that the retrieval and tool-calling workflows are operational,
+but do not establish production-level answer accuracy. The evaluation also
+identified remaining limitations in citation coverage, evidence-to-answer
+consistency, and out-of-domain handling.
+
+Refer to the full project report for the experimental methodology, detailed
+results, system limitations, and future improvements.
+
 
 ## SECTION 7: MISCELLANEOUS
 

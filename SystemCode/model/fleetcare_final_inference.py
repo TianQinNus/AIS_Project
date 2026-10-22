@@ -359,14 +359,16 @@ def apply_rule(row: pd.Series, profile: dict):
         percentile >= profile["enhanced_monitor_percentile"]
         and (row["is_risk6_persistent"] or row["is_risk6_rising"])
     ):
-        return "TR4", "MEDIUM", "ENHANCED_MONITOR", "The vehicle has high 24-unit risk with persistence or upward movement."
+        return "TR4", "MEDIUM", "ENHANCED_MONITOR", \
+    "The vehicle has a high near-term C4 risk rank with persistence or upward movement."
     if percentile >= profile["monitor_percentile"] and row["fast_risk6_deterioration"]:
         return "TR3", "MEDIUM", "ENHANCED_MONITOR", "Near-term risk is elevated and deteriorating faster than 95% of the fleet."
     if (
         percentile >= profile["monitor_percentile"]
         and (row["is_risk6_persistent"] or row["is_risk6_rising"])
     ):
-        return "TR5", "LOW", "MONITOR", "The vehicle has elevated 48-unit risk with persistence or upward movement."
+        return "TR5", "LOW", "MONITOR", \
+    "The vehicle has an elevated near-term C4 risk rank with persistence or upward movement."
     return "TR6", "NORMAL", "CONTINUE", "The model found no condition requiring escalation."
 
 
