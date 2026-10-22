@@ -1,5 +1,4 @@
-<img width="1078" height="607" alt="Screenshot 2026-10-22 at 7 06 21 PM" src="https://github.com/user-attachments/assets/1c1c2d14-b553-40c0-b36f-a87a50427fdf" />
-﻿# FleetCareAI — Intelligent Fleet Maintenance Decision Support System
+# FleetCareAI — Intelligent Fleet Maintenance Decision Support System
 
 **Course:** Intelligent Reasoning Systems (IRS)  
 **Project Name:** FleetCareAI  
