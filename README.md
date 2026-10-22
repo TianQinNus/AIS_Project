@@ -368,11 +368,12 @@ The assistant retrieves relevant maintenance reference material and provides sup
 
 The assistant is intended for decision support. It does not replace professional vehicle inspection, qualified mechanical diagnosis, or official regulatory advice.
 
+```markdown
 ---
 
-## SECTION 6: PROJECT REPORT / PAPER
+## SECTION 6: PROJECT REPORT
 
-The full project report is available in the GitHub repository:
+The full FleetCare AI project report is available in the GitHub repository.
 
 **Folder:** `ProjectReport/`
 
@@ -380,50 +381,96 @@ The full project report is available in the GitHub repository:
 
 ### Report Contents
 
-1. Executive Summary
-2. Business Problem Background
-3. Project Objectives and Scope
-4. Literature Review and Related Work
+1. Introduction
+2. Project Background and Commercial Context
+3. Project Scope and Limitations
+4. Data Collection and Preparation
 5. System Architecture and Design
-6. Machine Learning Prediction Models
-7. Temporal Risk Analysis
-8. Rule-Based Maintenance Reasoning
-9. Explainable AI Using SHAP
-10. AI Assistant and Retrieval-Augmented Generation
-11. Frontend and Backend Implementation
-12. Experiments, Testing, and Evaluation
-13. Results and Discussion
-14. System Limitations
-15. Conclusions and Future Improvements
-
-**Appendices**
-
-- Project Proposal
-- Installation and User Guide
-- System Architecture Diagrams
-- API Documentation
-- Evaluation Results
-- Individual Project Contributions and Reflections
-- References
+6. Predictive Model Implementation and Evaluation
+7. Temporal Rule-Based Reasoning
+8. Inference, Database Persistence, and SHAP Explainability
+9. RAG-Based Assistant
+10. Frontend and Backend Application
+11. Predictive-Modelling Experiments
+12. RAG and System-Integration Evaluation
+13. Future Work
+14. Appendices and Installation Guide
 
 ### Evaluation and Validation
 
-FleetCareAI includes evaluation activities covering model prediction, reasoning, knowledge retrieval, and system integration.
+FleetCare AI was evaluated across four connected areas: predictive modelling,
+rule-based reasoning, knowledge retrieval, and application integration.
 
-The RAG component has undergone an initial ten-question evaluation covering maintenance knowledge, Singapore transport policy, project-specific explanations, and out-of-scope questions.
+#### Predictive-Model Evaluation
 
-In the documented retrieval experiment, the eight answerable questions achieved:
+The final C4 ranking ensemble was evaluated on the official Test split,
+containing 5,045 vehicles and 60 C4 cases.
 
-- Macro Precision@5: 0.2000
-- Macro Recall@5: 0.78125
+At a fixed Top-5% inspection capacity:
 
-These are preliminary retrieval metrics based on a small, initially annotated test set. They are not measures of overall system accuracy or generated-answer correctness.
+- C4 vehicles identified: 20 of 60
+- Precision at Top 5%: 7.91%
+- Recall at Top 5%: 33.33%
+- Average Precision: 0.0552
+- ROC–AUC: 0.7907
 
-The reported experiment did not complete real LLM answer generation and human scoring. Further end-to-end validation is required.
+The original five-class baseline identified four C4 vehicles within the same
+Top-5% capacity. These results evaluate fleet prioritisation rather than
+confirmed fault diagnosis.
 
-Refer to the full evaluation report for experimental methodology, findings, and limitations.
+#### Rule-Engine Evaluation
+
+The rule engine was evaluated using stored prediction histories and the final
+C4 rankings. The model-defined Top-5% queue contained 253 vehicles and identified
+20 C4 cases.
+
+The additional TR2B rescue rule selected 22 vehicles outside this queue and
+identified two additional C4 cases. The resulting 275-vehicle inspection scope
+contained 22 C4 cases, corresponding to 8.00% precision and 36.67% recall.
+
+Selecting the next 22 vehicles directly from the model ranking produced the same
+number of C4 cases. TR2B therefore provides a transparent deterioration-based
+escalation condition, but does not demonstrate an equal-capacity improvement
+over direct model ranking.
+
+#### RAG Evaluation
+
+The assistant was evaluated using ten document questions and three synthetic
+vehicle-assessment cases. The document set included eight answerable questions
+and two boundary cases covering unavailable OEM information and an
+out-of-domain request.
+
+Controlled knowledge retrieval achieved:
+
+- Macro Precision@5: 0.175
+- Macro Recall@5: 0.5313
+
+The integrated assistant achieved:
+
+- Macro Precision@5: 0.150
+- Macro Recall@5: 0.4063
+- Mean automated response score: 5.40/8
+- Mean response time: 4.40 seconds
+
+When retrieved evidence was supplied directly to the language model,
+fixed-evidence generation achieved a mean automated score of 7.60/8.
+
+All three synthetic vehicle cases produced the expected tool calls and stored
+assessment fields, with a mean automated response score of 7.33/8. HTTP checks
+also verified the health endpoint, request validation, and vehicle-assessment
+chat workflow.
+
+These results are based on a small local evaluation set and automated scoring.
+They demonstrate that the retrieval and tool-calling workflows are operational,
+but do not establish production-level answer accuracy. The evaluation also
+identified remaining limitations in citation coverage, evidence-to-answer
+consistency, and out-of-domain handling.
+
+Refer to the full project report for the experimental methodology, detailed
+results, system limitations, and future improvements.
 
 ---
+```
 
 ## SECTION 7: MISCELLANEOUS
 
