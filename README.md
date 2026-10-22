@@ -103,7 +103,7 @@ It demonstrates:
 
 ### 4.2 Technical System Design Video
 
-**Video Link:** [Insert YouTube / Google Drive URL]
+**Video Link:** https://youtu.be/pnvF9ENN-2Q
 
 The technical demonstration explains the system architecture and its underlying prediction and reasoning mechanisms.
 
