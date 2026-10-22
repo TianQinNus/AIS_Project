@@ -368,8 +368,6 @@ The assistant retrieves relevant maintenance reference material and provides sup
 
 The assistant is intended for decision support. It does not replace professional vehicle inspection, qualified mechanical diagnosis, or official regulatory advice.
 
-```markdown
----
 
 ## SECTION 6: PROJECT REPORT
 
@@ -469,8 +467,6 @@ consistency, and out-of-domain handling.
 Refer to the full project report for the experimental methodology, detailed
 results, system limitations, and future improvements.
 
----
-```
 
 ## SECTION 7: MISCELLANEOUS
 
