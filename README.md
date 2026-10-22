@@ -6,56 +6,89 @@
 **Institution:** National University of Singapore — Institute of Systems Science (NUS-ISS)
 
 ---
-
 ## SECTION 1: PROJECT TITLE
 
-# FleetCareAI — Intelligent Fleet Maintenance Decision Support System
+# FleetCare AI — Intelligent Fleet Maintenance Decision-Support System
 
-**Predict Risks. Explain Decisions. Support Maintenance.**
+**Predict Risk. Explain Decisions. Prioritise Maintenance.**
 
-FleetCareAI is an AI-powered fleet maintenance decision support platform designed to help fleet managers and maintenance staff identify high-risk vehicles, understand predictive maintenance recommendations, and access relevant maintenance knowledge.
+FleetCare AI is an intelligent fleet-maintenance platform that helps fleet
+managers and maintenance personnel identify high-risk vehicles, prioritise
+limited inspection capacity, understand predictive results, and retrieve
+relevant maintenance knowledge.
 
-The system integrates machine learning, temporal risk analysis, rule-based reasoning, explainable AI, and retrieval-augmented generation (RAG) into a unified web application.
+The system integrates machine learning, temporal analysis, rule-based
+reasoning, SHAP explainability, and retrieval-augmented generation into a
+unified web application.
 
-**Core Features**
+### Core Features
 
-- Fleet Dashboard and Risk Monitoring
-- Vehicle Risk Analysis and Prediction History
-- Explainable Maintenance Recommendations
-- Maintenance Plan Summary
-- AI Assistant for Vehicle Analysis and Maintenance Knowledge
-
-## 🎬 Product Demonstration
-
-FleetCare AI is an intelligent predictive maintenance
-decision-support system designed to help fleet managers
-identify high-risk vehicles and prioritise inspections.
-
-[![Watch FleetCare AI Demo](https://github.com/user-attachments/assets/9f09e543-c782-4502-93de-eb386263cd94)](YOUR_VIDEO_URL)
-
-Click the image to watch our 5-minute product demonstration.
+- Fleet-wide risk monitoring and prioritisation
+- Vehicle-level risk analysis and prediction history
+- Rule-based maintenance actions with traceable evidence
+- SHAP-based model explanations
+- Maintenance-capacity and inspection-planning summaries
+- AI-assisted retrieval of vehicle assessments and maintenance knowledge
 
 ---
 
 ## SECTION 2: EXECUTIVE SUMMARY
 
-Commercial fleet maintenance is essential for ensuring vehicle reliability, operational efficiency, and road safety. Traditional maintenance processes often depend on scheduled inspections, manual monitoring, and fragmented maintenance records. These approaches may make it difficult for fleet operators to identify emerging risks, prioritise maintenance activities, and interpret complex vehicle data efficiently.
+Commercial vehicle fleets generate large volumes of operational data, but
+turning that data into timely maintenance decisions remains challenging.
+Scheduled inspections and manual monitoring may not adequately distinguish
+between vehicles with different operating histories, changing conditions, and
+levels of near-term maintenance risk. Fleet operators must determine not only
+which vehicles appear risky, but also which vehicles should be reviewed first,
+whether the available evidence is stable, and why a particular action has been
+recommended.
 
-FleetCareAI aims to address these challenges by providing an intelligent fleet maintenance decision support system that combines predictive analytics with explainable reasoning and AI-assisted knowledge retrieval.
+FleetCare AI addresses this problem through an integrated, human-in-the-loop
+decision-support workflow.
 
-The system uses machine learning models to assess vehicle conditions and generate risk scores across multiple prediction horizons. A temporal reasoning component examines historical predictions, risk persistence, and deterioration indicators to provide additional context for vehicle risk assessments.
+The predictive engine transforms cumulative operational readouts and vehicle
+specifications into 534 exposure-normalised and temporal features. A specialist
+XGBoost–LightGBM ensemble ranks active vehicles by near-term C4 risk, representing
+the final zero-to-six-unit period before a recorded maintenance event. A separate
+five-class XGBoost model provides the displayed C0–C4 maintenance stage and
+coherent Risk6, Risk12, Risk24, and Risk48 probabilities.
 
-A rule-based reasoning engine then translates these assessments into maintenance priorities and recommended actions. Each decision includes supporting evidence and explanations, helping users understand why a particular vehicle requires inspection, enhanced monitoring, or continued operation.
+An ordered temporal rule engine converts predictive evidence into operational
+actions ranging from `CONTINUE` to `PRIORITY_INSPECT`. The rules consider fleet
+risk percentiles, recent persistence, deterioration, disagreement between the
+specialist models, and the availability of sufficient prediction history.
+Unstable assessments are routed to `MANUAL_REVIEW`, while vehicles with
+insufficient data receive `COLLECT_MORE_DATA`.
 
-To improve interpretability, the system incorporates SHAP-based explanations that identify important feature contributions to model predictions. These explanations support model transparency but do not constitute confirmed mechanical fault diagnoses.
+Each assessment is stored in PostgreSQL with its predicted state, risk values,
+fleet percentile, matched rule, action reason, temporal evidence, and strongest
+SHAP contributions. SHAP explains which anonymised features influenced the C4
+XGBoost component, while the rule trace explains why the final operational
+action was assigned. These explanations support prioritisation and model
+review; they do not constitute confirmed mechanical diagnoses.
 
-FleetCareAI also provides an interactive web-based Dashboard. Fleet managers and maintenance staff can monitor fleet-wide risk distribution, identify high-priority vehicles, review maintenance capacity, and organise inspection activities based on recommended actions.
+The React dashboard provides fleet-level risk summaries, maintenance-planning
+indicators, high-priority alerts, and vehicle-level assessment pages. Users can
+review current probabilities, historical C4 rankings, model explanations, rule
+evidence, and recommended actions.
 
-In addition, an AI Assistant powered by Qwen supports natural-language interactions. Through Function Calling, the assistant can retrieve vehicle-specific predictions and analysis results from PostgreSQL. It also integrates retrieval-augmented generation using multilingual embeddings and pgvector to retrieve relevant maintenance guidance, project knowledge, and Singapore transport policy references.
+FleetCare AI also includes a Qwen-powered assistant with Function Calling. For
+vehicle-specific questions, the assistant retrieves stored predictions,
+actions, histories, and SHAP evidence from PostgreSQL. For maintenance, policy,
+and project questions, it searches a curated knowledge base using multilingual
+embeddings and pgvector. Retrieved passages retain their citation and
+applicability metadata to support evidence-grounded responses.
 
-The system is developed using React, FastAPI, SQLAlchemy, PostgreSQL, pgvector, and Qwen. Its modular architecture separates the presentation layer, business logic, AI orchestration, and data access, supporting maintainability and future extension.
+The system is implemented using React, FastAPI, SQLAlchemy, PostgreSQL,
+pgvector, XGBoost, LightGBM, SHAP, and Qwen. Its modular architecture separates
+prediction, operational reasoning, data persistence, application services, and
+user interaction.
 
-Overall, FleetCareAI demonstrates how machine learning, rule-based reasoning, explainable AI, and knowledge-grounded assistance can be integrated to support more informed fleet maintenance decisions.
+Overall, FleetCare AI demonstrates how predictive modelling, explicit temporal
+reasoning, explainability, and knowledge retrieval can be combined to support
+transparent fleet-maintenance prioritisation. The system supports professional
+judgement and inspection planning; it does not autonomously diagnose faults or
+authorise maintenance.
 
 ---
 
