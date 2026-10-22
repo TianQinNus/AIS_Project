@@ -347,7 +347,83 @@ FROM public.knowledge_chunk;
 
 The knowledge database must be populated before maintenance knowledge retrieval can function.
 
-### 5.6 Environment Configuration
+
+### 5.6 Embedding Model Setup
+
+FleetCareAI uses the `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` model to generate 384-dimensional embeddings for semantic knowledge retrieval.
+
+The model weights are not included in the GitHub repository and must be downloaded separately before using the AI Assistant's RAG functionality.
+
+#### Step 1: Navigate to the Backend Directory
+
+```bash
+cd SystemCode/backend
+```
+
+#### Step 2: Download the Embedding Model
+
+Ensure that `sentence-transformers` is installed:
+
+```bash
+python -m pip install sentence-transformers
+```
+
+Download the model and save it to the expected local directory:
+
+```bash
+python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); model.save('models/multilingual-minilm')"
+```
+
+An internet connection is required for the initial download.
+
+#### Step 3: Verify the Model Directory
+
+After downloading, the directory structure should resemble:
+
+```text
+SystemCode/
+└── backend/
+    ├── app/
+    ├── models/
+    │   └── multilingual-minilm/
+    │       ├── config.json
+    │       ├── modules.json
+    │       ├── model.safetensors
+    │       ├── tokenizer.json
+    │       └── ...
+    ├── scripts/
+    └── environment.yml
+```
+
+The exact files may vary depending on the model version.
+
+#### Step 4: Verify the Embedding Model
+
+From the backend directory, run:
+
+```bash
+python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('models/multilingual-minilm', local_files_only=True); print('Embedding dimension:', model.get_sentence_embedding_dimension())"
+```
+
+Expected output:
+
+```text
+Embedding dimension: 384
+```
+
+#### Important Notes
+
+- The embedding model is required for `KnowledgeSearchTool`.
+- The model must be available locally before starting knowledge retrieval.
+- The backend embedding provider must point to `models/multilingual-minilm`.
+- Query embeddings must use the same model as the precomputed document embeddings.
+- The model weights are not tracked in Git due to their size.
+- The PostgreSQL knowledge tables and pgvector embeddings must also be imported separately.
+
+Without the embedding model, the Fleet Dashboard and structured vehicle APIs may still function, but RAG-based maintenance and policy retrieval will be unavailable.
+
+
+### 5.7 Environment Configuration
 
 Create a `.env` file inside `SystemCode/backend`.
 
@@ -365,9 +441,8 @@ CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 
 The environment variable names above should be checked against the final backend configuration before submission.
 
-Do not commit real API keys, passwords, or `.env` files to GitHub.
 
-### 5.7 Start the Backend
+### 5.8 Start the Backend
 
 From `SystemCode/backend`:
 
@@ -387,7 +462,7 @@ Interactive API documentation:
 http://127.0.0.1:8000/docs
 ```
 
-### 5.8 Start the Frontend
+### 5.9 Start the Frontend
 
 Open a new terminal:
 
@@ -403,7 +478,7 @@ Open the local URL displayed by Vite, typically:
 http://localhost:5173
 ```
 
-### 5.9 Using FleetCareAI
+### 5.10 Using FleetCareAI
 
 **Fleet Dashboard**
 
