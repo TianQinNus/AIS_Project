@@ -257,10 +257,10 @@ psql -X -v ON_ERROR_STOP=1 \
   -f /path/to/fleetcare.sql
 ```
 
-**Important:** The complete business database dump may not be included in GitHub because of file-size restrictions. Obtain the dataset through the project team's designated distribution channel.
-
-Importing a complete SQL dump into an existing database may produce table conflicts. Follow the database reset instructions before restoring a fresh database.
-
+Please download the entire PostgreSQL database using the below link:
+```bash
+https://drive.google.com/file/d/1JMNy12i5nmPfxsfILchxve5c9CMH4eAA/view?usp=sharing
+```
 **RAG Knowledge Database**
 
 The knowledge retrieval component uses PostgreSQL and pgvector.
