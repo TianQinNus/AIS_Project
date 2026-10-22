@@ -12,3 +12,9 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+
+# Local database dump
+/SystemCode/backend/data/fleetcare.sql
+
+# Local embedding model
+/SystemCode/backend/models/multilingual-minilm/
