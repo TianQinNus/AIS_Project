@@ -37,7 +37,7 @@ Click the image to watch our 5-minute product demonstration.
 
 ---
 
-## SECTION 2: EXECUTIVE SUMMARY / PAPER ABSTRACT
+## SECTION 2: EXECUTIVE SUMMARY
 
 Commercial fleet maintenance is essential for ensuring vehicle reliability, operational efficiency, and road safety. Traditional maintenance processes often depend on scheduled inspections, manual monitoring, and fragmented maintenance records. These approaches may make it difficult for fleet operators to identify emerging risks, prioritise maintenance activities, and interpret complex vehicle data efficiently.
 
@@ -59,11 +59,11 @@ Overall, FleetCareAI demonstrates how machine learning, rule-based reasoning, ex
 
 ---
 
-## SECTION 3: CREDITS / PROJECT CONTRIBUTION
+## SECTION 3: PROJECT CONTRIBUTION
 
 | Official Full Name | Student ID | Project Contribution |
 |---|---|---|
-| Zhang Tianqin | A0356380B | Developed the machine-learning pipeline, including temporal feature engineering, imbalance handling, model experimentation and tuning, ensemble design, rule-engine integration, SHAP explainability, and production inference. Designed and implemented the database architecture and table schemas for vehicle data, predictions, explanations, and knowledge retrieval. As project leader, managed the overall product functionality, system integration, UI/UX, task allocation, team coordination, meetings, and project timeline. |
+| Zhang Tianqin | A0356380B | Developed the machine-learning pipeline, including temporal feature engineering, imbalance handling, model experimentation and tuning, ensemble design, rule-engine integration, SHAP explainability, and production inference. Designed the database architecture and table schemas for vehicle data, predictions, explanations, and knowledge retrieval. Built the initial RAG prototype and vehicle data-retrieval tool functions, and contributed to frontend and backend improvements. As project leader, managed overall product functionality, system integration, UI/UX, task allocation, team coordination, meetings, and the project timeline.|
 | Zhang Yuyue | A0305487X | [Confirm specific contributions] |
 | Ma Jialing | A0305478X | Designed and established the React frontend and FastAPI backend architecture, adopting a modular API–Service–Repository structure. Developed React frontend features and FastAPI backend APIs for the Fleet Dashboard and AI assistant. Designed PostgreSQL database integration and implemented fleet risk aggregation, maintenance statistics, and vehicle data retrieval using SQLAlchemy. Integrated Qwen 3.5 Flash with Function Calling and pgvector-based RAG to support vehicle risk explanations and maintenance knowledge queries. Supported frontend–backend integration, API testing, debugging, and system demonstrations. |
 | Gong Yucheng | A0355325E | Contributed to the initial project idea, business use cases, and refinement of the FleetCareAI solution. Co-developed the predictive maintenance models through data exploration, temporal feature engineering, model implementation, comparative experiments, tuning, and evaluation. Built the RAG knowledge base using official maintenance guidance, Singapore transport policy references, and project documentation; implemented document processing, multilingual embeddings, hybrid retrieval, and source citations, and migrated knowledge storage to PostgreSQL with pgvector. Prepared deployment instructions and interface documentation to support integration by the web team.
@@ -82,7 +82,6 @@ The project includes the following major workstreams:
 
 The final contribution table should specify each member's actual responsibilities and deliverables.
 
----
 
 ## SECTION 4: VIDEO OF SYSTEM MODELLING & USE CASE DEMO
 
@@ -92,35 +91,34 @@ FleetCareAI includes two video presentations covering the product experience and
 
 **Video Link:** [Insert YouTube / Google Drive URL]
 
-The product demonstration introduces FleetCareAI from the perspective of fleet managers and maintenance staff.
+The product demonstration presents FleetCare AI from the perspective of fleet managers and maintenance staff.
 
 It demonstrates:
 
-- Fleet-wide monitoring through the Dashboard
-- Vehicle risk distribution and top risk alerts
-- Maintenance capacity and planning
-- Vehicle-specific risk explanations
-- AI-assisted maintenance and policy knowledge retrieval
+- Fleet-wide monitoring through the dashboard
+- Vehicle risk distribution and top-risk alerts
+- Maintenance capacity and inspection planning
+- Vehicle-specific risk assessments and explanations
+- AI-assisted retrieval of vehicle assessments, maintenance guidance, and policy knowledge
 
 ### 4.2 Technical System Design Video
 
 **Video Link:** [Insert YouTube / Google Drive URL]
 
-The technical demonstration explains the underlying architecture and reasoning mechanisms.
+The technical demonstration explains the system architecture and its underlying prediction and reasoning mechanisms.
 
 Topics include:
 
-- High-Level System Architecture
-- Machine Learning Prediction
-- Temporal Risk Analysis
-- Rule-Based Maintenance Decision Engine
-- SHAP Explainability
-- FastAPI and PostgreSQL Integration
-- AI Assistant with Qwen Function Calling
-- RAG Knowledge Retrieval using pgvector
-- Dashboard and Chat Execution Sequences
+- High-level system architecture
+- Predictive model implementation and evaluation
+- Temporal feature engineering and risk analysis
+- Rule-based maintenance decision engine
+- SHAP-based model explainability
+- FastAPI and PostgreSQL integration
+- AI assistant with Qwen function calling
+- RAG knowledge retrieval using pgvector
+- Dashboard and assistant execution sequences
 
----
 
 ## SECTION 5: USER GUIDE
 
