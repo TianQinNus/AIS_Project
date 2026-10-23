@@ -154,15 +154,25 @@ sequences.
 
 ### 5.1 System Requirements
 
-**Recommended Development Environment**
+The installation walkthrough below targets a local macOS development setup:
 
-- Python 3.12
-- Node.js and npm
-- PostgreSQL 16
-- pgvector extension compatible with the installed PostgreSQL version
-- Conda or another Python virtual environment manager
-- Qwen-compatible API credentials
-- Internet access for remote LLM requests
+- Git and access to this repository
+- [Conda](https://docs.conda.io/projects/conda/en/stable/user-guide/install/index.html)
+  (Miniconda, Anaconda, or Miniforge); Python 3.12 is specified by the
+  backend environment file
+- [Node.js **24.x**](https://nodejs.org/en/download) and npm for the frontend
+- [Homebrew](https://brew.sh/) and Xcode Command Line Tools for PostgreSQL/pgvector installation
+- PostgreSQL **16** with the `vector` extension built for the same server version
+- A valid Qwen-compatible API key and an endpoint/model available to its account
+- Internet access for dependencies, the database dump, the embedding-model
+  download, and Qwen requests
+
+**Setup order:** clone → Python environment → PostgreSQL/pgvector and database
+role → `.env` → business dump → knowledge tables/seed → local embedding model
+→ backend → frontend → functional checks.
+
+The supplied database contains precomputed assessments and SHAP explanations;
+model training or inference is not required to run the web demonstration.
 
 ### 5.2 Project Architecture
 
@@ -199,315 +209,336 @@ FastAPI Backend
                                 (Maintenance Knowledge)
 ```
 
-### 5.3 Clone the Repository
+### 5.3 Clone the Repository and Set the Project Path
+
+The commands below use **macOS with Homebrew and Conda**. Run Steps 5.3–5.8
+in the same terminal. Keep the backend running in that terminal, then open a
+second terminal for Step 5.9.
 
 ```bash
 git clone https://github.com/TianQinNus/AIS_Project.git
 cd AIS_Project
+export FLEETCARE_ROOT="$PWD"
 ```
 
-### 5.4 Backend Setup
+If the repository is already cloned, enter its root directory and run only
+`export FLEETCARE_ROOT="$PWD"`. If the repository requires authentication, use
+your authorised GitHub account or clone with
+`git clone git@github.com:TianQinNus/AIS_Project.git` instead.
 
-Navigate to the backend directory:
+All paths below are quoted so that project folders containing spaces work.
+
+### 5.4 Create the Python Environment
+
+From the repository root:
 
 ```bash
-cd SystemCode/backend
+conda env create -f "$FLEETCARE_ROOT/SystemCode/backend/environment.yml"
+conda activate fleetcare
+python --version
+python -m pip check
+cd "$FLEETCARE_ROOT/SystemCode/backend"
 ```
 
-Create the Conda environment:
+Expected: Python 3.12 and `No broken requirements found.` If the `fleetcare`
+environment already exists, replace the creation command with:
 
 ```bash
-conda env create -f environment.yml
+conda env update -n fleetcare \
+  -f "$FLEETCARE_ROOT/SystemCode/backend/environment.yml" --prune
 conda activate fleetcare
 ```
 
-If the environment already exists:
+The supplied environment file contains macOS-specific Conda packages. It is the
+backend environment; `SystemCode/requirements.txt` is only a placeholder and
+must not be used to install the web application. Re-running predictive-model
+inference is a separate workflow described in Section 7.2.
 
-```bash
-conda env update -f environment.yml --prune
-```
+### 5.5 Install PostgreSQL 16 and Prepare an Empty Database
 
-### 5.5 PostgreSQL Database Setup
-
-Install and start PostgreSQL 16 on macOS using Homebrew:
+**Install the server and put its matching client tools on PATH:**
 
 ```bash
 brew install postgresql@16
+export PATH="$(brew --prefix postgresql@16)/bin:$PATH"
 brew services start postgresql@16
+psql --version
+pg_isready -h 127.0.0.1 -p 5432
 ```
 
-Create the database:
+Use an up-to-date PostgreSQL 16 installation and client. The readiness command
+should report `accepting connections`. These instructions assume that port
+5432 is available; stop any conflicting local PostgreSQL service or consistently
+use a different port in all database commands and in `.env`.
+
+**Install pgvector for this PostgreSQL 16 server:**
+
+The extension must be installed on the database server before it can be enabled
+with SQL. To avoid installing it for a different Homebrew PostgreSQL version,
+build it using PostgreSQL 16's `pg_config`:
 
 ```bash
-createdb fleetcare
+export PG_CONFIG="$(brew --prefix postgresql@16)/bin/pg_config"
+export FLEETCARE_PGVECTOR_BUILD="$(mktemp -d)"
+git clone --depth 1 --branch v0.8.7 \
+  https://github.com/pgvector/pgvector.git \
+  "$FLEETCARE_PGVECTOR_BUILD/pgvector"
+make -C "$FLEETCARE_PGVECTOR_BUILD/pgvector" PG_CONFIG="$PG_CONFIG"
+make -C "$FLEETCARE_PGVECTOR_BUILD/pgvector" PG_CONFIG="$PG_CONFIG" install
 ```
 
-The project requires the PostgreSQL `vector` extension for RAG knowledge retrieval.
+The build requires the Xcode Command Line Tools. If they are missing, run
+`xcode-select --install`, complete the installer, and retry the build. If the
+last command reports a permission error writing to the PostgreSQL installation,
+rerun that installation command with `sudo`, retaining the explicit
+`PG_CONFIG="$PG_CONFIG"` argument. See the
+[official pgvector installation notes](https://github.com/pgvector/pgvector#installation-notes)
+for platform-specific build issues.
 
-After installing a pgvector build compatible with PostgreSQL 16, enable the extension:
+**Create the application role, database, and extension:**
 
-```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-```
-
-### Business Database
-
-The FleetCare business database stores vehicle records, operational readouts,
-model assessments, rule-engine decisions, and SHAP explanations.
-
-The core tables are:
-
-- `public.truck`
-- `public.truck_readout`
-- `public.analysis`
-- `public.prediction_shap`
-
-#### Step 1: Download the Database Dump
-
-Download the PostgreSQL database dump using the link below:
-
-**[Download `fleetcare.sql`](https://drive.google.com/file/d/1JMNy12i5nmPfxsfILchxve5c9CMH4eAA/view?usp=sharing)**
-
-The downloaded file can remain in your Downloads folder. It does not need to be
-copied into the GitHub repository.
-
-#### Step 2: Create the Database
-
-If the `fleetcare` database does not already exist, create it:
+Run these commands as the local PostgreSQL administrator. A fresh Homebrew
+installation normally provides an administrator role matching your macOS user.
+If your server uses another administrator, add `-U YOUR_ADMIN` to these commands.
 
 ```bash
-createdb fleetcare
+createuser --login --pwprompt fleetcare_app
+createdb --owner=fleetcare_app fleetcare
+psql -X -v ON_ERROR_STOP=1 -d fleetcare \
+  -c "CREATE EXTENSION IF NOT EXISTS vector;"
+psql -X -d fleetcare \
+  -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
 ```
 
-If the database already exists and is empty, skip this step.
+Choose and remember the password prompted by `createuser`; use the same role
+and password in `.env`. If this role already exists, reuse its known password.
+If the database already exists, proceed only if it has no FleetCare tables;
+otherwise choose a new empty database and use its name consistently. Do not
+import the dump over an existing populated database.
 
-#### Step 3: Import the Database Dump
-
-Replace `/path/to/fleetcare.sql` with the actual location of the downloaded
-file:
+For the remaining database commands in this terminal, select the application
+connection explicitly:
 
 ```bash
-psql -X -v ON_ERROR_STOP=1 \
-  -d fleetcare \
-  -f /path/to/fleetcare.sql
+export PGHOST=127.0.0.1
+export PGPORT=5432
+export PGUSER=fleetcare_app
+export PGDATABASE=fleetcare
+psql -X -W -c "SELECT current_user, current_database();"
 ```
 
-For example, on macOS:
+Enter the application-role password when prompted. Expected user/database:
+`fleetcare_app` / `fleetcare`.
+
+### 5.6 Configure the Backend Before Importing Data
+
+Keep the active `fleetcare` environment and work from the backend directory:
 
 ```bash
-psql -X -v ON_ERROR_STOP=1 \
-  -d fleetcare \
-  -f ~/Downloads/fleetcare.sql
+cd "$FLEETCARE_ROOT/SystemCode/backend"
+cp .env.example .env
 ```
 
-This command reads the downloaded SQL file, creates the FleetCare tables, and
-imports the stored data into PostgreSQL.
+Run the copy command only when `.env` does not already exist. Open `.env` in a
+text editor and replace the placeholders:
 
-> **Important:** Importing the dump into a database that already contains the
-> FleetCare tables may produce table conflicts. Follow the database reset
-> instructions before importing a fresh copy.
+```dotenv
+DATABASE_URL=postgresql+psycopg://fleetcare_app:YOUR_URL_ENCODED_PASSWORD@127.0.0.1:5432/fleetcare
+DASHSCOPE_API_KEY=YOUR_QWEN_API_KEY
+LLM_MODEL=qwen3.5-flash
+QWEN_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+DEBUG=false
+```
 
-#### Step 4: Verify the Import
+- Use the database role/password created in Step 5.5. Percent-encode reserved
+  characters in the password portion of `DATABASE_URL` (for example, `@` becomes
+  `%40` and `#` becomes `%23`). Enter the original password at `psql` prompts.
+- The endpoint above is for Alibaba Cloud Model Studio's Singapore international
+  region. For a key issued by the Qwen AI Platform in China, use
+  `QWEN_BASE_URL=https://maas.qianwenaiapi.com/compatible-mode/v1` instead.
+  Configure one endpoint matching the key's platform; the selected model must
+  be available to that account and region.
+- `DATABASE_URL`, `DASHSCOPE_API_KEY`, and `QWEN_BASE_URL` are required by the
+  current settings loader, including during knowledge-seed import. Configure
+  them **before** running the import script. A real API key is needed to verify
+  the assistant; the dashboard itself does not make LLM requests.
+- Keep `.env` local; it is ignored by Git. Do not commit credentials. The backend
+  loads `.env` relative to the current directory, so run its Python commands
+  from `SystemCode/backend`.
 
-Check that the vehicle data were imported successfully:
+Check that the settings load and that Python connects to the intended database
+without printing the credentials:
 
 ```bash
-psql -d fleetcare -c \
-  "SELECT COUNT(*) AS vehicles FROM public.truck;"
+python -c "from sqlalchemy import text; from app.db.session import engine; c = engine.connect(); print(c.execute(text('SELECT current_user, current_database()')).one()); c.close()"
 ```
 
-You can also list the imported tables:
+### 5.7 Import Demonstration Data and Prepare Knowledge Retrieval
+
+**1. Download and import the business database.**
+
+Download [fleetcare.sql from Google Drive](https://drive.google.com/file/d/1JMNy12i5nmPfxsfILchxve5c9CMH4eAA/view?usp=sharing)
+and save it as `fleetcare.sql` in your Downloads folder (approximately 200 MiB).
+It contains vehicle readouts, precomputed model assessments, rule actions, and
+SHAP records. Normal web startup does not require running model inference.
+
+From the backend directory, with the database connection variables from Step
+5.5 still set:
 
 ```bash
-psql -d fleetcare -c "\dt public.*"
+psql -X -W -v ON_ERROR_STOP=1 -f "$HOME/Downloads/fleetcare.sql"
 ```
 
-The business database dump does not include the RAG knowledge tables. Follow the
-separate RAG Knowledge Database instructions to create and populate
-`public.knowledge_document` and `public.knowledge_chunk`.
+Change the quoted file path if you saved the download elsewhere. Import into
+the empty database prepared in Step 5.5. Stop and resolve any SQL error before
+continuing; a partially imported database is not ready for use.
 
-**RAG Knowledge Database**
-
-The knowledge retrieval component uses PostgreSQL and pgvector.
-
-Core knowledge tables include:
-
-- `knowledge_document`
-- `knowledge_chunk`
-
-The knowledge chunks contain source text, metadata, citations, and 384-dimensional embeddings.
-
-If the corresponding setup scripts and seed files are available:
+Verify all four business tables, not just that the database exists:
 
 ```bash
-psql -X -v ON_ERROR_STOP=1 \
-  -d fleetcare \
-  -f scripts/create_knowledge_tables.sql
+psql -X -W -v ON_ERROR_STOP=1 -c "
+SELECT 'truck' AS table_name, COUNT(*) AS rows FROM public.truck
+UNION ALL SELECT 'truck_readout', COUNT(*) FROM public.truck_readout
+UNION ALL SELECT 'analysis', COUNT(*) FROM public.analysis
+UNION ALL SELECT 'prediction_shap', COUNT(*) FROM public.prediction_shap;"
 ```
+
+The supplied demonstration snapshot contains 5,045 trucks, 193,095 readouts,
+30,265 assessments, and 149,045 SHAP records.
+
+**2. Create the knowledge tables and import the supplied seed.**
+
+These files are included in the repository. The business dump does not contain
+the knowledge tables, so this is a required step for document retrieval:
 
 ```bash
-python -m scripts.import_pgvector_seed \
-  --file data/pgvector_seed.json.gz
+cd "$FLEETCARE_ROOT/SystemCode/backend"
+psql -X -W -v ON_ERROR_STOP=1 -f scripts/create_knowledge_tables.sql
+python -m scripts.import_pgvector_seed --file data/pgvector_seed.json.gz
 ```
 
-Verify the imported knowledge:
-
-```sql
-SELECT COUNT(*)
-FROM public.knowledge_chunk;
-```
-
-The knowledge database must be populated before maintenance knowledge retrieval can function.
-
-
-### 5.6 Embedding Model Setup
-
-FleetCareAI uses the `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` model to generate 384-dimensional embeddings for semantic knowledge retrieval.
-
-The model weights are not included in the GitHub repository and must be downloaded separately before using the AI Assistant's RAG functionality.
-
-#### Step 1: Navigate to the Backend Directory
-
-```bash
-cd SystemCode/backend
-```
-
-#### Step 2: Download the Embedding Model
-
-Ensure that `sentence-transformers` is installed:
-
-```bash
-python -m pip install sentence-transformers
-```
-
-Download the model and save it to the expected local directory:
-
-```bash
-python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); model.save('models/multilingual-minilm')"
-```
-
-An internet connection is required for the initial download.
-
-#### Step 3: Verify the Model Directory
-
-After downloading, the directory structure should resemble:
+Expected importer output:
 
 ```text
-SystemCode/
-└── backend/
-    ├── app/
-    ├── models/
-    │   └── multilingual-minilm/
-    │       ├── config.json
-    │       ├── modules.json
-    │       ├── model.safetensors
-    │       ├── tokenizer.json
-    │       └── ...
-    ├── scripts/
-    └── environment.yml
-```
-
-The exact files may vary depending on the model version.
-
-#### Step 4: Verify the Embedding Model
-
-From the backend directory, run:
-
-```bash
-python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('models/multilingual-minilm', local_files_only=True); print('Embedding dimension:', model.get_sentence_embedding_dimension())"
-```
-
-Expected output:
-
-```text
+Import completed successfully.
+Documents imported: 5
+Chunks processed: 274
 Embedding dimension: 384
 ```
 
-#### Important Notes
-
-- The embedding model is required for `KnowledgeSearchTool`.
-- The model must be available locally before starting knowledge retrieval.
-- The backend embedding provider must point to `models/multilingual-minilm`.
-- Query embeddings must use the same model as the precomputed document embeddings.
-- The model weights are not tracked in Git due to their size.
-- The PostgreSQL knowledge tables and pgvector embeddings must also be imported separately.
-
-Without the embedding model, the Fleet Dashboard and structured vehicle APIs may still function, but RAG-based maintenance and policy retrieval will be unavailable.
-
-
-### 5.7 Environment Configuration
-
-Create a `.env` file inside `SystemCode/backend`.
-
-Choose the Qwen endpoint that matches the platform where the API key was
-created. Configure **one endpoint only**; API keys from the two platforms
-should not be assumed to be interchangeable.
-
-**Option A — Alibaba Cloud Model Studio, Singapore international region:**
-
-```dotenv
-DATABASE_URL=postgresql+psycopg://YOUR_USER:YOUR_PASSWORD@localhost:5432/fleetcare
-
-DASHSCOPE_API_KEY=YOUR_INTERNATIONAL_DASHSCOPE_API_KEY
-LLM_MODEL=qwen3.5-flash
-QWEN_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
-
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-```
-
-**Option B — Qwen AI Platform, China region:**
-
-```dotenv
-DATABASE_URL=postgresql+psycopg://YOUR_USER:YOUR_PASSWORD@localhost:5432/fleetcare
-
-DASHSCOPE_API_KEY=YOUR_CHINA_QWEN_API_KEY
-LLM_MODEL=qwen3.5-flash
-QWEN_BASE_URL=https://maas.qianwenaiapi.com/compatible-mode/v1
-
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173
-```
-
-The selected model must be available to the corresponding account and region.
-Do not commit the local `.env` file or expose its API key.
-
-
-### 5.8 Start the Backend
-
-From `SystemCode/backend`:
+Verify the stored vectors:
 
 ```bash
-uvicorn app.main:app --reload
+psql -X -W -v ON_ERROR_STOP=1 -c "
+SELECT COUNT(*) AS documents FROM public.knowledge_document;
+SELECT COUNT(*) AS chunks, MIN(vector_dims(embedding)) AS min_dimension,
+       MAX(vector_dims(embedding)) AS max_dimension
+FROM public.knowledge_chunk;"
 ```
 
-Default local server:
+Expected: 5 documents, 274 chunks, and dimensions 384 / 384. The seed importer
+updates existing records by source/citation ID, so it can be rerun without
+creating duplicate citations.
 
-```text
-http://127.0.0.1:8000
-```
+**3. Download and verify the matching embedding model.**
 
-Interactive API documentation:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-### 5.9 Start the Frontend
-
-Open a new terminal:
+The Python environment from Step 5.4 already includes `sentence-transformers`.
+From the backend directory, download the same model used to produce the seed
+vectors:
 
 ```bash
-cd SystemCode/fleetcare-frontend
-npm install
-npm run dev
+python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'); model.save('models/multilingual-minilm')"
+python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('models/multilingual-minilm', local_files_only=True); print('Embedding dimension:', model.get_sentence_embedding_dimension())"
 ```
 
-Open the local URL displayed by Vite, typically:
+Expected: `Embedding dimension: 384`. Internet access is required for the first
+download. The backend reads `SystemCode/backend/models/multilingual-minilm`
+directly; downloading the model only to a global cache is insufficient. Model
+weights are not tracked in Git. Both the local model and the populated knowledge
+tables are needed by `KnowledgeSearchTool`.
 
-```text
-http://localhost:5173
+### 5.8 Start the Backend — Terminal 1
+
+Keep this process running:
+
+```bash
+cd "$FLEETCARE_ROOT/SystemCode/backend"
+conda activate fleetcare
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-### 5.10 Using FleetCareAI
+Wait for `Application startup complete.` The API is at
+<http://127.0.0.1:8000>, with interactive documentation at
+<http://127.0.0.1:8000/docs>.
+
+### 5.9 Install and Start the Frontend — Terminal 2
+
+Open a **new terminal**. Replace `/absolute/path/to/AIS_Project` with the actual
+repository location; shell variables from Terminal 1 do not carry over:
+
+```bash
+cd "/absolute/path/to/AIS_Project/SystemCode/fleetcare-frontend"
+node --version
+npm --version
+npm ci
+npm run build
+npm run dev -- --host localhost --port 5173 --strictPort
+```
+
+Use Node.js **24.x** for this walkthrough. `npm ci` installs the versions in the
+committed lockfile; `npm run build` checks TypeScript and the production build
+before starting the development server.
+
+Open **<http://localhost:5173>** and keep both terminals running. The frontend's
+Vite configuration proxies `/api` requests to `http://127.0.0.1:8000`, so no
+frontend `.env` file is needed for this local setup. Leave `VITE_API_BASE_URL`
+unset. If port 5173 is occupied, stop the conflicting process before retrying;
+`--strictPort` prevents a silent change to an origin missing from CORS settings.
+
+`npm run build` alone does not start a server. This walkthrough uses
+`npm run dev`; serving the built files separately requires configuring their
+API routing.
+
+### 5.10 Verify the Running Web Product
+
+In a third terminal, run:
+
+```bash
+curl --fail-with-body http://127.0.0.1:8000/health
+curl --fail-with-body http://127.0.0.1:8000/api/v1/dashboard
+curl --fail-with-body 'http://127.0.0.1:8000/api/v1/vehicles?page=1&page_size=1'
+curl --fail-with-body http://127.0.0.1:8000/api/v1/vehicles/VHC-24705
+```
+
+Expected: HTTP success and JSON data. `/health` returns `{"status":"ok"}`;
+the dashboard and vehicle endpoints must also return populated data because
+the health endpoint alone does not test the database.
+
+Then check the browser at <http://localhost:5173>:
+
+1. The Dashboard loads fleet totals and priority alerts.
+2. Open Vehicles, search for `24705`, and inspect its risk, history, action,
+   and SHAP explanation.
+3. In the AI Assistant, ask `Explain the current action for vehicle 24705.`
+4. Ask `What should I check before driving a heavy goods vehicle?` and check
+   that the answer includes retrieved source citations.
+
+The two assistant checks require a working Qwen key/endpoint/model; the document
+question additionally verifies the local embedding model and knowledge tables.
+An HTTP-level assistant check is also available:
+
+```bash
+curl --fail-with-body --max-time 120 \
+  http://127.0.0.1:8000/api/v1/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"What should I check before driving a heavy goods vehicle?"}'
+```
+
+Expected: a JSON object with a nonempty `answer`. Review its content and sources
+as well as the HTTP status.
+
+### 5.11 Using FleetCareAI
 
 **Fleet Dashboard**
 
@@ -542,6 +573,29 @@ The assistant retrieves stored vehicle analysis data and explains relevant risk 
 The assistant retrieves relevant maintenance reference material and provides supporting sources where available.
 
 The assistant is intended for decision support. It does not replace professional vehicle inspection, qualified mechanical diagnosis, or official regulatory advice.
+
+### 5.12 Troubleshooting and Subsequent Starts
+
+| Symptom | Check / resolution |
+|---|---|
+| `conda: command not found` or activation fails | Install/initialise Conda for your shell and open a new terminal before Step 5.4. |
+| Missing settings / validation error during seed import or startup | Create and complete `backend/.env` first; activate `fleetcare` and run from `SystemCode/backend`. |
+| `psql: command not found` | Repeat the PostgreSQL 16 PATH export in Step 5.5 in the current terminal. |
+| Connection refused or password authentication failed | Check `pg_isready`, port, database name, role, and password. Match `.env` to the `psql` connection. |
+| `extension "vector" is not available` | Build pgvector using the `pg_config` for the running server, then enable it in the correct database as administrator. |
+| `invalid command \restrict` when importing the dump | Update the PostgreSQL 16 client and recheck `psql --version`; use a fresh empty database after an incomplete import. |
+| Tables already exist during business-data import | Use a new empty database rather than rerunning the dump over populated tables. |
+| Dashboard errors or empty data | Check all four business-table counts and the backend logs; `/health` success alone is insufficient. |
+| Embedding model not found / knowledge retrieval fails | Verify `backend/models/multilingual-minilm`, the 384-dimensional model, pgvector, and the knowledge-table counts. |
+| Assistant authentication/model error | Check the key's platform/region, endpoint, account access, and `LLM_MODEL`, then restart the backend after editing `.env`. |
+| Frontend install/build reports an unsupported Node version | Use Node.js 24.x, rerun `npm ci`, and then build again. |
+| Browser requests fail while direct API checks succeed | Use `http://localhost:5173`, leave `VITE_API_BASE_URL` unset, and confirm that both servers are running on the documented ports. |
+
+After the first successful setup, do not recreate the database, reimport the
+dump, or redownload the embedding model for each run. Start PostgreSQL, activate
+`fleetcare`, and repeat the backend and frontend start commands in Steps 5.8 and
+5.9. Run `npm ci` again when dependencies change. Stop each web server with
+`Ctrl+C`; this leaves the database data intact.
 
 
 ## SECTION 6: PROJECT REPORT
