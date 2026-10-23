@@ -678,19 +678,34 @@ The system provides maintenance recommendations and supporting information. Fina
 
 ### 7.4 Limitations and Future Work
 
-Current limitations include the dependence on available vehicle prediction records, the scope of the reference knowledge base, and the need for further end-to-end evaluation of AI-generated responses.
+### Current Limitations
+
+Current limitations include:
+
+- The operational features are anonymised, preventing component-level mechanical interpretation
+- Model performance has been evaluated on the SCANIA benchmark rather than a live commercial fleet
+- Risk percentiles depend on the composition of the currently eligible fleet
+- Vehicles with limited prediction history may not provide enough evidence for temporal reasoning
+- Rule thresholds are based on benchmark results and require validation against real maintenance policies and workshop capacity
+- The RAG knowledge base currently covers a limited set of maintenance, policy, and project documents
+- Citation coverage and evidence-to-answer consistency remain incomplete for some AI-generated responses
+- The assistant processes each request independently and does not retain multi-turn conversational memory
+- Final inspection and maintenance decisions still require review by qualified personnel
+
+### Future Enhancements
 
 Potential future enhancements include:
 
-- Expanded maintenance knowledge coverage
-- Improved retrieval relevance and evaluation
-- Multi-turn conversational memory
-- Role-based access control
-- Maintenance workflow and work-order integration
-- Production deployment and monitoring
-- Additional model validation with operational fleet data
-
----
+- Retraining the predictive models with documented operational features and confirmed maintenance outcomes
+- Validating model rankings and rule thresholds using live fleet data
+- Expanding the knowledge base with authorised service manuals, maintenance procedures, work orders, and internal policies
+- Improving retrieval relevance, citation coverage, and human evaluation of generated responses
+- Adding controlled multi-turn conversational memory
+- Introducing role-based access control and document-level permissions
+- Integrating maintenance scheduling, workshop capacity, and work-order systems
+- Monitoring data drift, model performance, action volumes, and fixed-capacity C4 recovery
+- Supporting version-controlled model retraining, rule updates, and knowledge-base maintenance
+- Deploying the system within a secure and monitored fleet environment
 
 ## Acknowledgements
 
