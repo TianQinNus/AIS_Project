@@ -626,7 +626,7 @@ Refer to the full project report for the experimental methodology, detailed
 results, system limitations, and future improvements.
 
 
-## SECTION 7: MISCELLANEOUS
+## SECTION 7: TECHNICAL REFERENCE AND LIMITATIONS
 
 ### 7.1 Technology Stack
 
@@ -645,7 +645,38 @@ results, system limitations, and future improvements.
 | API Documentation | FastAPI Swagger UI |
 | Version Control | Git and GitHub |
 
-### 7.2 Knowledge Sources
+### 7.2 Predictive Inference Workflow
+
+FleetCare AI uses a database-backed inference pipeline to convert vehicle
+readouts into maintenance assessments. For each eligible vehicle, the pipeline
+selects the latest available readout, reconstructs the frozen 534-feature model
+input, and applies the final predictive models.
+
+The XGBoost–LightGBM ensemble ranks near-term C4 risk, while the five-class
+XGBoost model provides the predicted C0–C4 maintenance stage and the Risk6,
+Risk12, Risk24, and Risk48 values. Recent prediction evidence is then used to
+calculate persistence, deterioration, volatility, and model disagreement. The
+temporal rule engine converts this evidence into a maintenance action, and SHAP
+identifies the strongest feature contributions from the C4 XGBoost component.
+
+The completed assessment, matched rule, supporting evidence, and SHAP
+explanations are stored in PostgreSQL for use by the Fleet Dashboard, Vehicle
+Analysis pages, and AI Assistant.
+
+The main implementation files are:
+
+- `SystemCode/model/fleetcare_final_inference.py`
+- `SystemCode/model/final_model_test54/final_model.joblib`
+- `SystemCode/model/final_model_test54/metadata.json`
+
+> **Demonstration data:** The supplied `fleetcare.sql` dump already contains
+> the vehicle readouts, model assessments, rule-engine actions, and SHAP
+> explanations required for the product demonstration. Re-running model
+> inference is not part of the normal application startup process. It is only
+> required when new readouts are added, the model or rules are updated, or the
+> stored assessments need to be regenerated.
+
+### 7.3 Knowledge Sources
 
 The RAG knowledge base includes selected reference materials from:
 
@@ -658,7 +689,7 @@ The documents support general maintenance guidance, regulatory reference, and ex
 
 UK maintenance guidance is not presented as Singapore law. Policy applicability must be checked against the relevant vehicle type, registration details, and current official requirements.
 
-### 7.3 Key System Design Principles
+### 7.4 Key System Design Principles
 
 **Modular Architecture**
 
@@ -676,7 +707,7 @@ Vehicle-specific information is retrieved from structured database records, whil
 
 The system provides maintenance recommendations and supporting information. Final inspection and repair decisions remain the responsibility of qualified personnel.
 
-### 7.4 Limitations and Future Work
+### 7.5 Limitations and Future Work
 
 ### Current Limitations
 
