@@ -122,7 +122,7 @@ FleetCareAI includes two video presentations covering the product experience and
 
 ### 4.1 Product Demonstration Video
 
-<a href="https://youtu.be/gtZbNnbaPN4">
+<a href="https://youtu.be/C0QNjExkMWU">
   <img
     src="https://github.com/user-attachments/assets/a0923621-f67a-408a-80ae-72742e5ec27a"
     alt="Watch the FleetCare AI Product Demonstration"
