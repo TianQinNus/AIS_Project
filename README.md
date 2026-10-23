@@ -439,19 +439,36 @@ Without the embedding model, the Fleet Dashboard and structured vehicle APIs may
 
 Create a `.env` file inside `SystemCode/backend`.
 
-Example:
+Choose the Qwen endpoint that matches the platform where the API key was
+created. Configure **one endpoint only**; API keys from the two platforms
+should not be assumed to be interchangeable.
+
+**Option A — Alibaba Cloud Model Studio, Singapore international region:**
 
 ```dotenv
 DATABASE_URL=postgresql+psycopg://YOUR_USER:YOUR_PASSWORD@localhost:5432/fleetcare
 
-DASHSCOPE_API_KEY=YOUR_QWEN_API_KEY
-QWEN_MODEL=qwen3.5-flash
+DASHSCOPE_API_KEY=YOUR_INTERNATIONAL_DASHSCOPE_API_KEY
+LLM_MODEL=qwen3.5-flash
+QWEN_BASE_URL=https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+**Option B — Qwen AI Platform, China region:**
+
+```dotenv
+DATABASE_URL=postgresql+psycopg://YOUR_USER:YOUR_PASSWORD@localhost:5432/fleetcare
+
+DASHSCOPE_API_KEY=YOUR_CHINA_QWEN_API_KEY
+LLM_MODEL=qwen3.5-flash
 QWEN_BASE_URL=https://maas.qianwenaiapi.com/compatible-mode/v1
 
 CORS_ORIGINS=http://localhost:3000,http://localhost:5173
 ```
 
-The environment variable names above should be checked against the final backend configuration before submission.
+The selected model must be available to the corresponding account and region.
+Do not commit the local `.env` file or expose its API key.
 
 
 ### 5.8 Start the Backend
