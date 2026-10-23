@@ -600,11 +600,12 @@ dump, or redownload the embedding model for each run. Start PostgreSQL, activate
 
 ## SECTION 6: PROJECT REPORT
 
-The full FleetCare AI project report is available in the GitHub repository.
+The final FleetCare AI project report is hosted on Google Drive. Anyone with
+these links can view or download the PDF without requesting access.
 
-**Folder:** `ProjectReport/`
+**Final Report (PDF, 30 pages):** [View the final project report](https://drive.google.com/file/d/1AdJuVVEpTVI3lskZmlor3J-SzVUQKCPN/view)
 
-**Report Link:** [Insert final report URL]
+**Download:** [Download AIS_FinalProposal.pdf](https://drive.google.com/uc?export=download&id=1AdJuVVEpTVI3lskZmlor3J-SzVUQKCPN)
 
 ### Report Contents
 
