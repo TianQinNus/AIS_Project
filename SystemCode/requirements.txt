@@ -1,1 +1,0 @@
-# Lists Python packages required to install and run the system.
